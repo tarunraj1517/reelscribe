@@ -8,7 +8,6 @@
   function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function ssGet(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
   function ssSet(k, v) { try { sessionStorage.setItem(k, v); } catch (e) {} }
-  if (lsGet('rsmOff') === '1') return;
 
   var D = {"e":{"neutral":[13.9,45.4,-1.1,0,13.9,45.4,-1.1,0,12.8,0,0,0,"none","none"],"upward-side-glance":[16.4,37.8,-14.6,0,16.4,37.8,-14.6,0,32.1,7.3,27.8,-16.1,"none","none"],"downward-gaze":[16.3,50.0,5.9,0,16.3,50.0,5.9,0,35.5,-15.1,0.1,-14.5,"none","none"],"skeptical-right":[17.0,53.1,5.9,0,43.9,10,5.9,0,34.1,-16.5,-3.8,-13.7,"none","none"],"small-attentive":[16.0,35.0,5.9,0,16.0,35.0,5.9,0,28.7,-4.2,14.4,11.2,"none","none"],"wide-downward-gaze":[46.0,46.9,5.9,0,47.1,47.6,5.9,0,47.3,-19.2,15.2,11.8,"none","none"],"surprised-left":[45.6,47.2,5.9,0,45.6,47.2,5.9,0,48.7,2.9,-16.1,-20.9,"none","none"],"sleepy-squint":[45.7,10,5.9,0,45.7,10,5.9,0,41.6,3.4,13.2,9.0,"none","none"],"angry-right":[14.9,35.8,5.9,-30.9,14.9,35.8,5.9,28.8,29.8,8.1,17.6,-11.1,"none","none"],"curious-left":[14.5,43.2,5.9,23.5,14.5,43.2,5.9,-24.0,32.7,-12.3,-17.6,5.9,"none","none"],"asymmetric-down-right":[36.4,37.2,5.9,0,16.0,17.6,5.9,0,39.5,-20.1,12.6,-12.7,"none","none"],"attentive-left":[17.8,53.6,5.9,0,17.8,53.6,5.9,0,34.6,1.4,6.2,10.6,"none","none"],"joyful-wide":[28.1,80.8,5.9,0,28.1,78.6,5.9,0,37.2,-2.1,-15.9,-14.5,"none","none"],"eyes-closed":[50.1,10.9,5.9,0,50.1,10.6,5.9,0,47.0,-8.8,-8.7,-10.8,"none","none"],"joyful-down-right":[25.2,72.1,5.9,0,25.2,72.1,5.9,0,46.5,-15.3,15.0,12.8,"none","none"],"skeptical-left":[18.2,54.7,5.9,0,42.9,10,5.9,0,40.0,3.5,-7.1,9.8,"none","none"],"far-right-glance":[16.4,35.2,5.9,0,16.4,35.2,5.9,0,31.7,0.3,35.3,-10.9,"none","none"],"angry-left":[13.5,44.1,5.9,-27.6,13.5,44.1,5.9,26.1,32.9,-14.8,-19.4,5.6,"none","none"],"playful-right":[13.0,38.8,5.9,26.3,13.0,38.8,5.9,-20.2,29.5,-4.4,14.1,-16.1,"none","none"],"asymmetric-up-left":[36.0,37.1,5.9,0,16.1,17.5,5.9,0,38.2,6.6,4.7,12.8,"none","none"],"gentle-downward-gaze":[17.0,54.1,5.9,0,17.0,54.1,5.9,0,34.0,-6.1,-11.0,-14.0,"none","none"],"wide-down-left":[29.4,74.5,5.9,0,29.4,74.5,5.9,0,48.6,-17.1,18.1,13.9,"none","none"],"surprised-wide-left":[45.3,45.5,5.9,0,44.4,44.8,5.9,0,46.8,-5.4,-11.7,-13.5,"none","none"],"drowsy-closed":[49.6,10.0,5.9,0,49.6,10.0,5.9,0,46.2,10.3,3.4,7.6,"none","none"],"suspicious-right":[17.9,51.3,-3.9,0,47.5,10,-3.9,0,37.7,-17.8,10,-10.9,"none","none"],"shy-downward":[15.4,27.4,45.9,0,17.1,28.9,45.9,0,29.0,7.1,7.8,3.9,"none","none"],"angry-brows":[21.1,58.4,5.9,-36.2,21.1,58.4,5.9,27.7,46.5,10.5,5.1,4.7,"none","shake"],"uneasy-left":[14.5,43.2,5.9,23.5,14.5,43.2,5.9,-24.0,32.7,-12.3,-17.6,5.9,"shake","slowDrift"]},"a":{"sleeping":{"s":[["eyes-closed",3600,500],["drowsy-closed",3600,500],["sleepy-squint",3600,500]],"b":[4800,6500,9500,420]},"waking":{"s":[["eyes-closed",2300,500]],"b":[1200,1800,3600,220]},"idle":{"s":[["upward-side-glance",5200,500],["curious-left",5200,500]],"b":[2600,3400,6200,280]},"listening":{"s":[["attentive-left",2300,500],["downward-gaze",2300,500],["gentle-downward-gaze",2300,500]],"b":[3200,4800,7200,240]},"thinking":{"s":[["curious-left",2300,500],["angry-left",2300,500],["skeptical-left",2300,500],["playful-right",2300,500],["skeptical-right",2300,500]],"b":[2100,2800,5000,260]},"searching":{"s":[["far-right-glance",2300,500],["asymmetric-down-right",2300,500],["surprised-left",2300,500],["wide-down-left",2300,500],["wide-downward-gaze",2300,500],["asymmetric-up-left",2300,500]],"b":[2100,2800,5000,260]},"working":{"s":[["angry-right",2300,500],["angry-left",2300,500],["joyful-wide",2300,500],["attentive-left",2300,500]],"b":[2100,2800,5000,260]},"excited":{"s":[["joyful-down-right",2300,500],["playful-right",2300,500],["surprised-wide-left",2300,500],["surprised-left",2300,500],["joyful-wide",2300,500]],"b":[1200,1800,3600,220]},"bored":{"s":[["sleepy-squint",3600,500],["drowsy-closed",3600,500],["upward-side-glance",3600,500]],"b":[4800,6500,9500,420]},"suspicious":{"s":[["skeptical-left",2300,500],["skeptical-right",2300,500],["suspicious-right",2300,500]],"b":[2100,2800,5000,260]},"angry":{"s":[["angry-right",2300,500],["angry-left",2300,500]],"b":[2100,2800,5000,260]},"drowsy":{"s":[["sleepy-squint",3600,500],["drowsy-closed",3600,500],["eyes-closed",3600,500]],"b":[4800,6500,9500,420]},"happy":{"s":[["joyful-down-right",2300,500],["joyful-wide",2300,500],["playful-right",2300,500],["gentle-downward-gaze",2300,500]],"b":[2100,2800,5000,260]},"curious":{"s":[["surprised-left",2300,500],["surprised-wide-left",2300,500],["upward-side-glance",2300,500],["far-right-glance",2300,500]],"b":[2100,2800,5000,260]},"confused":{"s":[["skeptical-left",2300,500],["skeptical-right",2300,500],["curious-left",2300,500]],"b":[2100,2800,5000,260]},"surprised":{"s":[["surprised-left",2300,500],["surprised-wide-left",2300,500]],"b":[1200,1800,3600,220]},"proud":{"s":[["far-right-glance",2300,500],["curious-left",2300,500],["joyful-down-right",2300,500]],"b":[2100,2800,5000,260]},"shy":{"s":[["upward-side-glance",2300,500],["shy-downward",2300,500],["eyes-closed",2300,500]],"b":[2100,2800,5000,260]},"sad":{"s":[["sleepy-squint",3600,500],["eyes-closed",3600,500],["drowsy-closed",3600,500]],"b":[4800,6500,9500,420]},"laughing":{"s":[["joyful-down-right",2300,500],["joyful-wide",2300,500],["playful-right",2300,500]],"b":[1200,1800,3600,220]},"scared":{"s":[["surprised-left",2300,500],["surprised-wide-left",2300,500]],"b":[1200,1800,3600,220]},"playful":{"s":[["joyful-down-right",2300,500],["playful-right",2300,500],["joyful-wide",2300,500],["curious-left",2300,500]],"b":[2100,2800,5000,260]},"celebrate":{"s":[["joyful-down-right",2300,500],["curious-left",2300,500],["playful-right",2300,500]],"b":[1200,1800,3600,220]}},"x":{"sleeping":["flat","rest","slow",0],"waking":["smile","wave","float",0],"idle":["o","rest","float",0],"listening":["o","rest","float",0],"thinking":["flat","rest","float",0],"searching":["o","rest","tilt",0],"working":["o","rest","fast",0],"excited":["big","cheer","bounce",0],"bored":["flat","rest","slow",0],"suspicious":["flat","rest","tilt",0],"angry":["frown","rest","float",0],"drowsy":["o","rest","slow",0],"happy":["smile","rest","float",0],"curious":["o","rest","tilt",0],"confused":["wavy","rest","tilt",0],"surprised":["bigo","cheer","bounce",0],"proud":["smile","rest","float",0],"shy":["smile","rest","float",0],"sad":["frown","rest","slow",0],"laughing":["big","cheer","bounce",0],"scared":["bigo","rest","fast",0],"playful":["big","wave","tilt",0],"celebrate":["big","cheer","jump",1]}}, E = D.e, A = D.a, X = D.x, K = .55;
   var reduce = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -20,9 +19,12 @@
     '#rsm-box{position:relative;width:112px;pointer-events:auto;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}' +
     '#rsm-box.rsm-grab{cursor:grabbing}#rsm-box:focus-visible{outline:2px solid #6FD62A;outline-offset:2px;border-radius:12px}' +
     '#rsm-box svg{display:block;width:100%;height:auto;overflow:visible}' +
-    '#rsm-x{position:absolute;top:0;right:0;width:22px;height:22px;border-radius:50%;border:0;background:rgba(14,14,16,.7);color:#fff;font:600 13px/22px system-ui,sans-serif;padding:0;cursor:pointer;opacity:0;transition:opacity .2s}' +
-    '#rsm-box:hover #rsm-x,#rsm-x:focus-visible{opacity:1}' +
-    '@media (hover:none){#rsm-x{opacity:.75}}' +
+    '#rsm-x,#rsm-s{position:absolute;top:0;width:22px;height:22px;border-radius:50%;border:0;background:rgba(14,14,16,.7);color:#fff;padding:0;cursor:pointer;opacity:0;transition:opacity .2s;display:flex;align-items:center;justify-content:center}' +
+    '#rsm-x{right:0;font:600 14px/1 system-ui,sans-serif}#rsm-s{left:0}#rsm-s.on{background:#6FD62A;color:#17220F;opacity:.9}' +
+    '#rsm-box:hover #rsm-x,#rsm-box:hover #rsm-s,#rsm-x:focus-visible,#rsm-s:focus-visible{opacity:1}' +
+    '@media (hover:none){#rsm-x,#rsm-s{opacity:.75}}' +
+    '#rsm-back{position:fixed;right:14px;bottom:14px;z-index:9990;width:40px;height:40px;border-radius:50%;border:0;padding:0;background:transparent;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.2)}#rsm-back svg{display:block}' +
+    '@media (max-width:480px){#rsm-back{right:8px;bottom:8px}}@media print{#rsm-back{display:none}}' +
     '@media (max-width:480px){#rsm-wrap{right:8px;bottom:8px}#rsm-box{width:76px}#rsm-bub{max-width:170px;font-size:12px}}' +
     '@media print{#rsm-wrap{display:none}}' +
     '.rsm-m{transform-origin:110px 249px}.rsm-an{transform-origin:112px 166px;animation:rsm-sway 2s ease-in-out infinite alternate}' +
@@ -63,11 +65,14 @@
     '<g class="rsm-conf"><circle cx="40" cy="170" r="4" fill="#B6F56E"/><rect x="60" y="140" width="7" height="7" fill="#FF6A3D"/><circle cx="180" cy="165" r="4" fill="#FFD166"/><rect x="170" y="195" width="7" height="7" fill="#B6F56E"/><circle cx="30" cy="225" r="3.5" fill="#FFD166"/><rect x="190" y="145" width="7" height="7" fill="#FF6A3D"/></g>' +
     '</svg>';
 
+  var BELL = '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M12 3a6 6 0 0 0-6 6v4l-2 3h16l-2-3V9a6 6 0 0 0-6-6zm-2 15a2 2 0 0 0 4 0z" fill="currentColor"/></svg>';
+  var CHIP = '<svg viewBox="0 0 40 40" width="40" height="40" aria-hidden="true"><circle cx="20" cy="20" r="20" fill="#6FD62A"/><ellipse cx="14" cy="12" rx="6" ry="3" fill="#B6F56E" opacity=".7" transform="rotate(-30 14 12)"/><rect x="12" y="15" width="5" height="12" rx="2.5" fill="#17220F"/><rect x="23" y="15" width="5" height="12" rx="2.5" fill="#17220F"/></svg>';
   var M = { o: ['M107 218a3 4 0 1 0 6 0a3 4 0 1 0-6 0', 1], bigo: ['M105 217a5 6 0 1 0 10 0a5 6 0 1 0-10 0', 1], smile: ['M101 215Q110 224 119 215', 0], big: ['M100 213Q110 232 120 213Z', 1], flat: ['M102 218L118 218', 0], wavy: ['M100 219Q105 213 110 219T120 219', 0], frown: ['M101 222Q110 214 119 222', 0] };
 
   var wrap, box, bub, svg, roll, face, eyes, mo, eL, eR, rL, rR;
   var cur = E.neutral.slice(0, 12), startV = cur, name = '', steps = [], vec = [], cyc = 1, t0 = 0, blink = [0, 1, 2, 1], nb = 0, si = 0;
   var running = false, busy = null, hideT = 0, backT = 0, lastAct = Date.now(), hoverOn = false;
+  var lookX = 0, lookY = 0, tgtX = 0, tgtY = 0, focusEl = null, origTitle = null, titleT = 0, audioCtx = null, alertsOn = lsGet('rsmAlerts') === '1', wired = false;
 
   function ease(t) { return t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
   function lerp(a, b, t) { var r = [], i; for (i = 0; i < 12; i++) r.push(a[i] + (b[i] - a[i]) * t); return r; }
@@ -90,14 +95,16 @@
     if (ex[13] === 'shake') dx = Math.sin(now / 22) * 2.2;
     if (ex[13] === 'slowDrift') { dx = Math.sin(now / 900) * 2.5; dy = Math.cos(now / 1100) * 2; }
     setEye(eL, rL, v[0], v[1], v[2], v[3], -1, v[8], j); setEye(eR, rR, v[4], v[5], v[6], v[7], 1, v[8], -j);
-    face.setAttribute('transform', 'translate(' + Math.max(-15, Math.min(15, v[10] * .4)) + ' ' + (-v[9] * .4) + ')');
+    face.setAttribute('transform', 'translate(' + (Math.max(-15, Math.min(15, v[10] * .4)) + lookX) + ' ' + (-v[9] * .4 + lookY) + ')');
     roll.setAttribute('transform', 'translate(' + dx + ' ' + dy + ') rotate(' + (v[11] * .35) + ' 110 205)');
     var s = 1;
     if (now >= nb) { var p = (now - nb) / blink[3]; if (p >= 1) nb = now + blink[1] + Math.random() * (blink[2] - blink[1]); else s = 1 - .92 * Math.sin(Math.PI * p); }
     eyes.setAttribute('transform', 'translate(0 201) scale(1 ' + s + ') translate(0 -201)');
   }
   function loop(now) {
-    if (document.hidden || !wrap.isConnected) { running = false; return; }
+    if (document.hidden || !wrap || !wrap.isConnected) { running = false; return; }
+    var f = (name === 'sleeping' || name === 'drowsy') ? 0 : 1;
+    lookX += (tgtX * f - lookX) * .12; lookY += (tgtY * f - lookY) * .12;
     cur = sample(now - t0); render(cur, now); requestAnimationFrame(loop);
   }
   function kick() { if (reduce || running) return; running = true; requestAnimationFrame(loop); }
@@ -126,7 +133,7 @@
   }
   function setBusy(n, text) { if (!wrap) return; busy = { name: n, text: text }; clearTimeout(backT); play(n); bubble(text, 0); }
   function clearBusy() { busy = null; }
-  function hide() { try { localStorage.setItem('rsmOff', '1'); } catch (e) {} if (wrap) { wrap.remove(); wrap = null; } }
+  function hide() { try { localStorage.setItem('rsmOff', '1'); } catch (e) {} if (wrap) { wrap.remove(); wrap = null; } showChip(); }
 
   var BTN = '.btn,.cta,.cta-outline,button[type="submit"],.frame-dl,#genBtn';
   var YT = /^(https?:\/\/)?(www\.|m\.)?(youtube\.com\/(watch\?v=|shorts\/|live\/)|youtu\.be\/)[\w-]{6,}/i;
@@ -139,11 +146,77 @@
     else say('confused', m.length < 70 ? m : 'Check that and try again.', 5000);
   }
 
+  function aim(x, y) {
+    if (!box) return;
+    var r = box.getBoundingClientRect(), dx = x - (r.left + r.width / 2), dy = y - (r.top + r.height / 2), d = Math.sqrt(dx * dx + dy * dy) || 1, s = Math.min(1, d / 180);
+    tgtX = dx / d * 5 * s; tgtY = dy / d * 4 * s;
+  }
+  function aimEl(el) { var r = el.getBoundingClientRect(); aim(r.left + Math.min(r.width - 10, 14 + (el.value || '').length * 8), r.top + r.height / 2); }
+
+  function setTitle(t) { if (origTitle === null) origTitle = document.title; document.title = t; clearTimeout(titleT); }
+  function resetTitleSoon(ms) { clearTimeout(titleT); titleT = setTimeout(function () { if (origTitle !== null && !busy) { document.title = origTitle; origTitle = null; } }, ms); }
+  function ding() {
+    try {
+      var C = window.AudioContext || window.webkitAudioContext; if (!C) return;
+      audioCtx = audioCtx || new C(); if (audioCtx.state === 'suspended') audioCtx.resume();
+      var t = audioCtx.currentTime;
+      [[880, 0], [1320, .14]].forEach(function (n) {
+        var o = audioCtx.createOscillator(), g = audioCtx.createGain(); o.type = 'sine'; o.frequency.value = n[0];
+        g.gain.setValueAtTime(0, t + n[1]); g.gain.linearRampToValueAtTime(.12, t + n[1] + .02); g.gain.exponentialRampToValueAtTime(.0001, t + n[1] + .35);
+        o.connect(g); g.connect(audioCtx.destination); o.start(t + n[1]); o.stop(t + n[1] + .4);
+      });
+    } catch (e) {}
+  }
+  function notify(title, ok) {
+    setTitle((ok ? '\u2705 ' : '\u26A0\uFE0F ') + title);
+    if (alertsOn) {
+      if (ok) ding();
+      try { if (navigator.vibrate) navigator.vibrate(ok ? [120, 60, 120] : [200]); } catch (e) {}
+      try { if (document.hidden && 'Notification' in window && Notification.permission === 'granted') { var n = new Notification('ReelScribe', { body: title, icon: '/assets/favicon.png' }); n.onclick = function () { window.focus(); n.close(); }; } } catch (e) {}
+    }
+    if (!document.hidden) resetTitleSoon(6000);
+  }
+  function toggleAlerts(e) {
+    e.stopPropagation(); alertsOn = !alertsOn;
+    try { localStorage.setItem('rsmAlerts', alertsOn ? '1' : '0'); } catch (err) {}
+    syncBell();
+    if (!alertsOn) { say('happy', 'Alerts off. I will stay quiet.', 3500); return; }
+    ding();
+    var msg = 'Alerts on! I will ding when your clips are ready.';
+    if ('Notification' in window) {
+      if (Notification.permission === 'default') { try { var pr = Notification.requestPermission(); if (pr && pr.then) pr.then(function (p) { if (p !== 'granted') say('shy', 'Notifications are blocked, but sound still works.', 4500); }); } catch (err) {} }
+      else if (Notification.permission === 'denied') msg = 'Alerts on (sound and vibration). Notifications are blocked in this browser.';
+    } else msg = 'Alerts on (sound and vibration).';
+    say('happy', msg, 4500);
+  }
+
+  function nameFrom(email) {
+    var s = (email || '').split('@')[0].split(/[^A-Za-z]+/).filter(function (x) { return x.length >= 2; })[0];
+    return s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : '';
+  }
+  function quotaNote(d) {
+    var u = d && d.usage; if (!u || !u.clipDayLimit) return '';
+    var left = Math.max(0, u.clipDayLimit - (u.clipDay || 0));
+    if (left === 0) return "You've used all your clips for today.";
+    return left === 1 ? 'Only 1 clip left today.' : '';
+  }
+  function getJson(url) { return fetch(url, { credentials: 'same-origin' }).then(function (r) { return r.json(); }); }
+  function loadInfo() {
+    var c; try { c = JSON.parse(ssGet('rsmInfo')); } catch (e) { c = null; }
+    if (c) return Promise.resolve(c);
+    return getJson('/me').then(function (me) {
+      if (!me || !me.loggedIn) return null;
+      var info = { name: nameFrom(me.email), note: '' };
+      return getJson('/user-plan').then(function (d) { info.note = quotaNote(d); return info; }, function () { return info; });
+    }).then(function (info) { if (info) ssSet('rsmInfo', JSON.stringify(info)); return info; }).catch(function () { return null; });
+  }
+
   function watchUrl(id, hint, strict) {
     var inp = document.getElementById(id), tt; if (!inp) return;
-    inp.addEventListener('focus', function () { if (!busy) say('listening', hint, 3000); });
+    inp.addEventListener('focus', function () { focusEl = inp; aimEl(inp); if (!busy) say('listening', hint, 3000); });
+    inp.addEventListener('blur', function () { focusEl = null; });
     inp.addEventListener('input', function () {
-      clearTimeout(tt);
+      aimEl(inp); clearTimeout(tt);
       tt = setTimeout(function () { var v = inp.value.trim(); if (v && !busy && (!strict || YT.test(v))) say('happy', 'Nice link! Looks good.', 3000); }, 600);
     });
   }
@@ -165,10 +238,12 @@
       last = key;
       if (key === 'done') {
         clearBusy(); var txt = (on && on.textContent || '').trim();
-        if (/^0 /.test(txt)) say('sad', 'No clips came back. Try another video.', 6000); else say('celebrate', (txt || 'Your clips') + '! Ready to download.', 7000);
+        if (/^0 /.test(txt)) { say('sad', 'No clips came back. Try another video.', 6000); notify('No clips came back', false); }
+        else { say('celebrate', (txt || 'Your clips') + '! Ready to download.', 7000); notify('Your clips are ready!', true); }
+        getJson('/user-plan').then(function (d) { var n = quotaNote(d); if (n) setTimeout(function () { say('shy', n, 6000); }, 7600); }).catch(function () {});
       } else if (key === 'err') {
-        clearBusy(); say('sad', ((sub && sub.textContent) || 'Something went wrong.').slice(0, 80), 7000);
-      } else if (MAP[key.slice(1)]) { setBusy(MAP[key.slice(1)][0], MAP[key.slice(1)][1]); }
+        clearBusy(); say('sad', ((sub && sub.textContent) || 'Something went wrong.').slice(0, 80), 7000); notify('Something went wrong', false);
+      } else if (MAP[key.slice(1)]) { setBusy(MAP[key.slice(1)][0], MAP[key.slice(1)][1]); setTitle('\u23F3 ' + MAP[key.slice(1)][1]); }
     }
     var mo2 = new MutationObserver(check), o = { attributes: true, childList: true, characterData: true, subtree: true };
     mo2.observe(pc, o); mo2.observe(rs, { attributes: true, attributeFilter: ['style', 'class'] });
@@ -180,15 +255,28 @@
     var pt = document.getElementById('previewText'); if (!pt) return;
     new MutationObserver(function () {
       var t = pt.textContent.trim(); if (!t) return;
-      if (/^(Generating|Uploading)/i.test(t)) setBusy('working', 'Transcribing... one moment.');
-      else { clearBusy(); if (/error|wrong|fail|invalid|please|too large|try again/i.test(t)) say('confused', t.slice(0, 80), 6000); else say('happy', 'Transcript ready!', 5000); }
+      if (/^(Generating|Uploading)/i.test(t)) { setBusy('working', 'Transcribing... one moment.'); setTitle('\u23F3 Transcribing...'); }
+      else if (/error|wrong|fail|invalid|please|too large|try again/i.test(t)) { clearBusy(); say('confused', t.slice(0, 80), 6000); notify('Transcript failed', false); }
+      else { clearBusy(); say('happy', 'Transcript ready!', 5000); notify('Your transcript is ready!', true); }
     }).observe(pt, { childList: true, characterData: true, subtree: true });
   }
 
   function wirePage() {
     var page = (location.pathname.split('/').pop() || 'index.html').replace(/\.html$/, '') || 'index';
     var hello = { index: "Hey there! Paste a link and I'll cut your clips.", 'clips-dashboard': "Paste a link, pick a style, and let's cut.", transcript: 'Paste a video link or upload a file.', dashboard: 'Welcome back! Ready to cut some clips?', history: 'Your past transcripts live here.', pricing: 'Pick the plan that fits you.', login: 'Hi! Log in and I will get you started.', referral: 'Invite friends and earn free clips.' }[page];
-    if (ssGet('rsmGreeted')) say('waking', '', 2500); else { ssSet('rsmGreeted', '1'); say('waking', hello || 'Hi there!', 4500); }
+    var tip = { index: 'Paste a link to start.', 'clips-dashboard': 'Ready to cut some clips?', transcript: 'Need a transcript?', dashboard: 'Here is your overview.', history: 'Your transcripts are here.', pricing: 'Pick a plan that fits you.', referral: 'Share your link and earn clips.' }[page] || '';
+    if (ssGet('rsmGreeted')) say('waking', '', 2500);
+    else {
+      ssSet('rsmGreeted', '1');
+      var done = false, fb = setTimeout(function () { if (!done) { done = true; say('waking', hello || 'Hi there!', 4500); } }, 1800);
+      loadInfo().then(function (info) {
+        if (done) return; done = true; clearTimeout(fb);
+        var msg = hello || 'Hi there!';
+        if (info && info.name) msg = ('Welcome back, ' + info.name + '! ' + tip).trim();
+        say('waking', msg, 5000);
+        if (info && info.note) setTimeout(function () { say('curious', info.note, 6000); }, 5400);
+      });
+    }
 
     if (page === 'index') {
       watchUrl('clipUrl', 'Paste your YouTube link here.', true);
@@ -233,7 +321,7 @@
   }
   function applyPos() {
     var p; try { p = JSON.parse(lsGet('rsmPos')); } catch (e) { p = null; }
-    if (!p || p.length !== 2) return;
+    if (!p || p.length !== 2 || !wrap) return;
     var r = wrap.getBoundingClientRect(), v = vp();
     setLT(p[0] * (v[0] - r.width), p[1] * (v[1] - r.height));
   }
@@ -244,15 +332,16 @@
   function setupDrag() {
     var drag = null;
     box.addEventListener('pointerdown', function (e) {
-      if (e.target.id === 'rsm-x' || (e.pointerType === 'mouse' && e.button !== 0)) return;
-      var r = wrap.getBoundingClientRect(); drag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, l: r.left, t: r.top, on: false }; try { box.setPointerCapture(e.pointerId); } catch (err) {}
+      if ((e.target.closest && e.target.closest('#rsm-x,#rsm-s')) || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      var r = wrap.getBoundingClientRect(); drag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, l: r.left, t: r.top, on: false };
+      try { box.setPointerCapture(e.pointerId); } catch (err) {}
     });
     box.addEventListener('pointermove', function (e) {
       if (!drag || e.pointerId !== drag.id) return;
       var dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
       if (!drag.on) {
         if (Math.abs(dx) + Math.abs(dy) < 8) return;
-        drag.on = true; dragged = true; try { box.setPointerCapture(e.pointerId); } catch (err) {}
+        drag.on = true; dragged = true;
         box.classList.add('rsm-grab'); clearTimeout(backT); play('surprised'); bubble('', 0);
       }
       setLT(drag.l + dx, drag.t + dy);
@@ -269,27 +358,52 @@
       if (k) { e.preventDefault(); var r = wrap.getBoundingClientRect(); setLT(r.left + k[0], r.top + k[1]); savePos(); }
       else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); box.click(); }
     });
-    window.addEventListener('resize', applyPos);
+    window.addEventListener('resize', function () { applyPos(); if (focusEl) aimEl(focusEl); });
     applyPos();
   }
 
-  function init() {
+  function ensureCss() {
+    if (document.getElementById('rsm-css')) return;
     var st = document.createElement('style'); st.id = 'rsm-css'; st.textContent = CSS; document.head.appendChild(st);
+  }
+  function showChip() {
+    if (document.getElementById('rsm-back')) return;
+    ensureCss();
+    var b = document.createElement('button'); b.id = 'rsm-back'; b.type = 'button'; b.title = 'Show mascot'; b.setAttribute('aria-label', 'Show mascot'); b.innerHTML = CHIP;
+    b.addEventListener('click', function () { try { localStorage.removeItem('rsmOff'); } catch (e) {} b.remove(); build(); wireGlobal(); });
+    document.body.appendChild(b);
+  }
+  function syncBell() {
+    var b = wrap && wrap.querySelector('#rsm-s');
+    if (b) { b.classList.toggle('on', alertsOn); b.setAttribute('aria-pressed', alertsOn ? 'true' : 'false'); }
+  }
+
+  function build() {
+    ensureCss();
     wrap = document.createElement('div'); wrap.id = 'rsm-wrap';
-    wrap.innerHTML = '<div id="rsm-bub" aria-hidden="true"></div><div id="rsm-box" tabindex="0" role="button" aria-label="Mascot. Drag to move it, or use the arrow keys.">' + SVG + '<button id="rsm-x" type="button" aria-label="Hide mascot">\u00d7</button></div>';
+    wrap.innerHTML = '<div id="rsm-bub" aria-hidden="true"></div><div id="rsm-box" tabindex="0" role="button" aria-label="Mascot. Drag to move it, or use the arrow keys.">' + SVG +
+      '<button id="rsm-s" type="button" aria-pressed="false" aria-label="Sound and notifications" title="Sound and notifications">' + BELL + '</button>' +
+      '<button id="rsm-x" type="button" aria-label="Hide mascot" title="Hide mascot">\u00d7</button></div>';
     document.body.appendChild(wrap);
     box = wrap.querySelector('#rsm-box'); bub = wrap.querySelector('#rsm-bub'); svg = wrap.querySelector('#rsm');
     roll = svg.querySelector('#rsm-roll'); face = svg.querySelector('#rsm-face'); eyes = svg.querySelector('#rsm-eyes'); mo = svg.querySelector('#rsm-mo');
     eL = svg.querySelector('#rsm-eL'); eR = svg.querySelector('#rsm-eR'); rL = eL.firstChild; rR = eR.firstChild;
 
     wrap.querySelector('#rsm-x').addEventListener('click', function (e) { e.stopPropagation(); hide(); });
+    wrap.querySelector('#rsm-s').addEventListener('click', toggleAlerts);
     var clicks = [['laughing', 'Hehe, that tickles!'], ['playful', 'Drag me anywhere you like!'], ['happy', "Hi! I'm here if you need me."]], ci = 0;
     box.addEventListener('click', function () { if (dragged) return; var c = clicks[ci++ % clicks.length]; say(c[0], c[1], 3000); });
-    setupDrag();
+    setupDrag(); syncBell(); play('waking');
+  }
 
+  function wireGlobal() {
+    if (wired) { say('happy', "I'm back!", 3000); return; }
+    wired = true;
     ['pointermove', 'pointerdown', 'keydown', 'scroll', 'touchstart'].forEach(function (ev) {
       window.addEventListener(ev, function () { lastAct = Date.now(); if (name === 'drowsy' || name === 'sleeping') say('waking', '', 2600); }, { passive: true });
     });
+    window.addEventListener('pointermove', function (e) { if (focusEl) aimEl(focusEl); else aim(e.clientX, e.clientY); }, { passive: true });
+    window.addEventListener('scroll', function () { if (focusEl) aimEl(focusEl); }, { passive: true });
     document.addEventListener('pointerover', function (e) {
       if (e.pointerType !== 'mouse' || busy || !wrap) return;
       var t = e.target.closest && e.target.closest(BTN);
@@ -305,17 +419,20 @@
       var t = e.target.closest && e.target.closest(BTN);
       if (t && !wrap.contains(t)) say('excited', '', 1300);
     }, true);
-    document.addEventListener('visibilitychange', function () { if (!document.hidden) kick(); });
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) { kick(); if (origTitle !== null && !busy) resetTitleSoon(3000); } });
     setInterval(function () {
       if (document.hidden || busy || !wrap) return;
       var idle = Date.now() - lastAct;
       if (idle > 70000 && name !== 'sleeping') play('sleeping'); else if (idle > 30000 && name === 'idle') play('drowsy');
     }, 4000);
-
     var oa = window.alert;
     window.alert = function (m) { try { reactAlert(String(m)); } catch (e) {} return oa.apply(this, arguments); };
+    wirePage();
+  }
 
-    play('waking'); wirePage();
+  function init() {
+    if (lsGet('rsmOff') === '1') { showChip(); return; }
+    build(); wireGlobal();
   }
 
   window.ReelMascot = { say: say, setBusy: setBusy, clearBusy: clearBusy, play: function (n) { if (wrap) play(n); }, hide: hide };
