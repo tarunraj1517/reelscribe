@@ -13,10 +13,12 @@
   var D = {"e":{"neutral":[13.9,45.4,-1.1,0,13.9,45.4,-1.1,0,12.8,0,0,0,"none","none"],"upward-side-glance":[16.4,37.8,-14.6,0,16.4,37.8,-14.6,0,32.1,7.3,27.8,-16.1,"none","none"],"downward-gaze":[16.3,50.0,5.9,0,16.3,50.0,5.9,0,35.5,-15.1,0.1,-14.5,"none","none"],"skeptical-right":[17.0,53.1,5.9,0,43.9,10,5.9,0,34.1,-16.5,-3.8,-13.7,"none","none"],"small-attentive":[16.0,35.0,5.9,0,16.0,35.0,5.9,0,28.7,-4.2,14.4,11.2,"none","none"],"wide-downward-gaze":[46.0,46.9,5.9,0,47.1,47.6,5.9,0,47.3,-19.2,15.2,11.8,"none","none"],"surprised-left":[45.6,47.2,5.9,0,45.6,47.2,5.9,0,48.7,2.9,-16.1,-20.9,"none","none"],"sleepy-squint":[45.7,10,5.9,0,45.7,10,5.9,0,41.6,3.4,13.2,9.0,"none","none"],"angry-right":[14.9,35.8,5.9,-30.9,14.9,35.8,5.9,28.8,29.8,8.1,17.6,-11.1,"none","none"],"curious-left":[14.5,43.2,5.9,23.5,14.5,43.2,5.9,-24.0,32.7,-12.3,-17.6,5.9,"none","none"],"asymmetric-down-right":[36.4,37.2,5.9,0,16.0,17.6,5.9,0,39.5,-20.1,12.6,-12.7,"none","none"],"attentive-left":[17.8,53.6,5.9,0,17.8,53.6,5.9,0,34.6,1.4,6.2,10.6,"none","none"],"joyful-wide":[28.1,80.8,5.9,0,28.1,78.6,5.9,0,37.2,-2.1,-15.9,-14.5,"none","none"],"eyes-closed":[50.1,10.9,5.9,0,50.1,10.6,5.9,0,47.0,-8.8,-8.7,-10.8,"none","none"],"joyful-down-right":[25.2,72.1,5.9,0,25.2,72.1,5.9,0,46.5,-15.3,15.0,12.8,"none","none"],"skeptical-left":[18.2,54.7,5.9,0,42.9,10,5.9,0,40.0,3.5,-7.1,9.8,"none","none"],"far-right-glance":[16.4,35.2,5.9,0,16.4,35.2,5.9,0,31.7,0.3,35.3,-10.9,"none","none"],"angry-left":[13.5,44.1,5.9,-27.6,13.5,44.1,5.9,26.1,32.9,-14.8,-19.4,5.6,"none","none"],"playful-right":[13.0,38.8,5.9,26.3,13.0,38.8,5.9,-20.2,29.5,-4.4,14.1,-16.1,"none","none"],"asymmetric-up-left":[36.0,37.1,5.9,0,16.1,17.5,5.9,0,38.2,6.6,4.7,12.8,"none","none"],"gentle-downward-gaze":[17.0,54.1,5.9,0,17.0,54.1,5.9,0,34.0,-6.1,-11.0,-14.0,"none","none"],"wide-down-left":[29.4,74.5,5.9,0,29.4,74.5,5.9,0,48.6,-17.1,18.1,13.9,"none","none"],"surprised-wide-left":[45.3,45.5,5.9,0,44.4,44.8,5.9,0,46.8,-5.4,-11.7,-13.5,"none","none"],"drowsy-closed":[49.6,10.0,5.9,0,49.6,10.0,5.9,0,46.2,10.3,3.4,7.6,"none","none"],"suspicious-right":[17.9,51.3,-3.9,0,47.5,10,-3.9,0,37.7,-17.8,10,-10.9,"none","none"],"shy-downward":[15.4,27.4,45.9,0,17.1,28.9,45.9,0,29.0,7.1,7.8,3.9,"none","none"],"angry-brows":[21.1,58.4,5.9,-36.2,21.1,58.4,5.9,27.7,46.5,10.5,5.1,4.7,"none","shake"],"uneasy-left":[14.5,43.2,5.9,23.5,14.5,43.2,5.9,-24.0,32.7,-12.3,-17.6,5.9,"shake","slowDrift"]},"a":{"sleeping":{"s":[["eyes-closed",3600,500],["drowsy-closed",3600,500],["sleepy-squint",3600,500]],"b":[4800,6500,9500,420]},"waking":{"s":[["eyes-closed",2300,500]],"b":[1200,1800,3600,220]},"idle":{"s":[["upward-side-glance",5200,500],["curious-left",5200,500]],"b":[2600,3400,6200,280]},"listening":{"s":[["attentive-left",2300,500],["downward-gaze",2300,500],["gentle-downward-gaze",2300,500]],"b":[3200,4800,7200,240]},"thinking":{"s":[["curious-left",2300,500],["angry-left",2300,500],["skeptical-left",2300,500],["playful-right",2300,500],["skeptical-right",2300,500]],"b":[2100,2800,5000,260]},"searching":{"s":[["far-right-glance",2300,500],["asymmetric-down-right",2300,500],["surprised-left",2300,500],["wide-down-left",2300,500],["wide-downward-gaze",2300,500],["asymmetric-up-left",2300,500]],"b":[2100,2800,5000,260]},"working":{"s":[["angry-right",2300,500],["angry-left",2300,500],["joyful-wide",2300,500],["attentive-left",2300,500]],"b":[2100,2800,5000,260]},"excited":{"s":[["joyful-down-right",2300,500],["playful-right",2300,500],["surprised-wide-left",2300,500],["surprised-left",2300,500],["joyful-wide",2300,500]],"b":[1200,1800,3600,220]},"bored":{"s":[["sleepy-squint",3600,500],["drowsy-closed",3600,500],["upward-side-glance",3600,500]],"b":[4800,6500,9500,420]},"suspicious":{"s":[["skeptical-left",2300,500],["skeptical-right",2300,500],["suspicious-right",2300,500]],"b":[2100,2800,5000,260]},"angry":{"s":[["angry-right",2300,500],["angry-left",2300,500]],"b":[2100,2800,5000,260]},"drowsy":{"s":[["sleepy-squint",3600,500],["drowsy-closed",3600,500],["eyes-closed",3600,500]],"b":[4800,6500,9500,420]},"happy":{"s":[["joyful-down-right",2300,500],["joyful-wide",2300,500],["playful-right",2300,500],["gentle-downward-gaze",2300,500]],"b":[2100,2800,5000,260]},"curious":{"s":[["surprised-left",2300,500],["surprised-wide-left",2300,500],["upward-side-glance",2300,500],["far-right-glance",2300,500]],"b":[2100,2800,5000,260]},"confused":{"s":[["skeptical-left",2300,500],["skeptical-right",2300,500],["curious-left",2300,500]],"b":[2100,2800,5000,260]},"surprised":{"s":[["surprised-left",2300,500],["surprised-wide-left",2300,500]],"b":[1200,1800,3600,220]},"proud":{"s":[["far-right-glance",2300,500],["curious-left",2300,500],["joyful-down-right",2300,500]],"b":[2100,2800,5000,260]},"shy":{"s":[["upward-side-glance",2300,500],["shy-downward",2300,500],["eyes-closed",2300,500]],"b":[2100,2800,5000,260]},"sad":{"s":[["sleepy-squint",3600,500],["eyes-closed",3600,500],["drowsy-closed",3600,500]],"b":[4800,6500,9500,420]},"laughing":{"s":[["joyful-down-right",2300,500],["joyful-wide",2300,500],["playful-right",2300,500]],"b":[1200,1800,3600,220]},"scared":{"s":[["surprised-left",2300,500],["surprised-wide-left",2300,500]],"b":[1200,1800,3600,220]},"playful":{"s":[["joyful-down-right",2300,500],["playful-right",2300,500],["joyful-wide",2300,500],["curious-left",2300,500]],"b":[2100,2800,5000,260]},"celebrate":{"s":[["joyful-down-right",2300,500],["curious-left",2300,500],["playful-right",2300,500]],"b":[1200,1800,3600,220]}},"x":{"sleeping":["flat","rest","slow",0],"waking":["smile","wave","float",0],"idle":["o","rest","float",0],"listening":["o","rest","float",0],"thinking":["flat","rest","float",0],"searching":["o","rest","tilt",0],"working":["o","rest","fast",0],"excited":["big","cheer","bounce",0],"bored":["flat","rest","slow",0],"suspicious":["flat","rest","tilt",0],"angry":["frown","rest","float",0],"drowsy":["o","rest","slow",0],"happy":["smile","rest","float",0],"curious":["o","rest","tilt",0],"confused":["wavy","rest","tilt",0],"surprised":["bigo","cheer","bounce",0],"proud":["smile","rest","float",0],"shy":["smile","rest","float",0],"sad":["frown","rest","slow",0],"laughing":["big","cheer","bounce",0],"scared":["bigo","rest","fast",0],"playful":["big","wave","tilt",0],"celebrate":["big","cheer","jump",1]}}, E = D.e, A = D.a, X = D.x, K = .55;
   var reduce = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
 
-  var CSS = '#rsm-wrap{position:fixed;right:14px;bottom:14px;z-index:9990;display:flex;flex-direction:column;align-items:flex-end;gap:6px;pointer-events:none;font-family:"Instrument Sans",system-ui,sans-serif}' +
-    '#rsm-bub{max-width:210px;background:#EEE9C6;color:#1B2412;border:1px solid #d9d3a4;border-radius:14px;padding:8px 12px;font-size:13px;line-height:1.35;font-weight:500;opacity:0;transform:translateY(6px) scale(.96);transition:opacity .2s,transform .2s;box-shadow:0 4px 14px rgba(0,0,0,.12)}' +
+  var CSS = '#rsm-wrap{position:fixed;right:14px;bottom:14px;z-index:9990;pointer-events:none;font-family:"Instrument Sans",system-ui,sans-serif}' +
+    '#rsm-bub{position:absolute;bottom:100%;right:0;margin-bottom:6px;width:max-content;max-width:210px;background:#EEE9C6;color:#1B2412;border:1px solid #d9d3a4;border-radius:14px;padding:8px 12px;font-size:13px;line-height:1.35;font-weight:500;opacity:0;transform:translateY(6px) scale(.96);transition:opacity .2s,transform .2s;box-shadow:0 4px 14px rgba(0,0,0,.12)}' +
     '#rsm-bub.on{opacity:1;transform:none}' +
-    '#rsm-box{position:relative;width:112px;pointer-events:auto;cursor:pointer;-webkit-tap-highlight-color:transparent}' +
+    '#rsm-wrap.rsm-left #rsm-bub{right:auto;left:0}#rsm-wrap.rsm-below #rsm-bub{bottom:auto;top:100%;margin:6px 0 0}' +
+    '#rsm-box{position:relative;width:112px;pointer-events:auto;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}' +
+    '#rsm-box.rsm-grab{cursor:grabbing}#rsm-box:focus-visible{outline:2px solid #6FD62A;outline-offset:2px;border-radius:12px}' +
     '#rsm-box svg{display:block;width:100%;height:auto;overflow:visible}' +
     '#rsm-x{position:absolute;top:0;right:0;width:22px;height:22px;border-radius:50%;border:0;background:rgba(14,14,16,.7);color:#fff;font:600 13px/22px system-ui,sans-serif;padding:0;cursor:pointer;opacity:0;transition:opacity .2s}' +
     '#rsm-box:hover #rsm-x,#rsm-x:focus-visible{opacity:1}' +
@@ -217,18 +219,73 @@
     }
   }
 
+  var dragged = false;
+  function vp() { return [document.documentElement.clientWidth, window.innerHeight]; }
+  function setLT(l, t) {
+    var r = wrap.getBoundingClientRect(), v = vp();
+    l = Math.max(4, Math.min(v[0] - r.width - 4, l)); t = Math.max(4, Math.min(v[1] - r.height - 4, t));
+    wrap.style.right = 'auto'; wrap.style.bottom = 'auto'; wrap.style.left = l + 'px'; wrap.style.top = t + 'px';
+    wrap.classList.toggle('rsm-left', l + r.width / 2 < v[0] / 2); wrap.classList.toggle('rsm-below', t + r.height / 2 < v[1] / 2);
+  }
+  function savePos() {
+    var r = wrap.getBoundingClientRect(), v = vp(), fx = v[0] - r.width > 0 ? r.left / (v[0] - r.width) : 1, fy = v[1] - r.height > 0 ? r.top / (v[1] - r.height) : 1;
+    try { localStorage.setItem('rsmPos', JSON.stringify([fx, fy])); } catch (e) {}
+  }
+  function applyPos() {
+    var p; try { p = JSON.parse(lsGet('rsmPos')); } catch (e) { p = null; }
+    if (!p || p.length !== 2) return;
+    var r = wrap.getBoundingClientRect(), v = vp();
+    setLT(p[0] * (v[0] - r.width), p[1] * (v[1] - r.height));
+  }
+  function resetPos() {
+    try { localStorage.removeItem('rsmPos'); } catch (e) {}
+    wrap.style.left = wrap.style.top = wrap.style.right = wrap.style.bottom = ''; wrap.classList.remove('rsm-left', 'rsm-below');
+  }
+  function setupDrag() {
+    var drag = null;
+    box.addEventListener('pointerdown', function (e) {
+      if (e.target.id === 'rsm-x' || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      var r = wrap.getBoundingClientRect(); drag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, l: r.left, t: r.top, on: false }; try { box.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+    box.addEventListener('pointermove', function (e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      var dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
+      if (!drag.on) {
+        if (Math.abs(dx) + Math.abs(dy) < 8) return;
+        drag.on = true; dragged = true; try { box.setPointerCapture(e.pointerId); } catch (err) {}
+        box.classList.add('rsm-grab'); clearTimeout(backT); play('surprised'); bubble('', 0);
+      }
+      setLT(drag.l + dx, drag.t + dy);
+    });
+    function end(e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      var was = drag.on; drag = null; box.classList.remove('rsm-grab');
+      if (was) { savePos(); say('happy', '', 1200); setTimeout(function () { dragged = false; }, 60); }
+    }
+    box.addEventListener('pointerup', end); box.addEventListener('pointercancel', end);
+    box.addEventListener('dblclick', function () { resetPos(); say('happy', 'Back in my corner!', 2500); });
+    box.addEventListener('keydown', function (e) {
+      var k = { ArrowLeft: [-24, 0], ArrowRight: [24, 0], ArrowUp: [0, -24], ArrowDown: [0, 24] }[e.key];
+      if (k) { e.preventDefault(); var r = wrap.getBoundingClientRect(); setLT(r.left + k[0], r.top + k[1]); savePos(); }
+      else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); box.click(); }
+    });
+    window.addEventListener('resize', applyPos);
+    applyPos();
+  }
+
   function init() {
     var st = document.createElement('style'); st.id = 'rsm-css'; st.textContent = CSS; document.head.appendChild(st);
     wrap = document.createElement('div'); wrap.id = 'rsm-wrap';
-    wrap.innerHTML = '<div id="rsm-bub" aria-hidden="true"></div><div id="rsm-box">' + SVG + '<button id="rsm-x" type="button" aria-label="Hide mascot">\u00d7</button></div>';
+    wrap.innerHTML = '<div id="rsm-bub" aria-hidden="true"></div><div id="rsm-box" tabindex="0" role="button" aria-label="Mascot. Drag to move it, or use the arrow keys.">' + SVG + '<button id="rsm-x" type="button" aria-label="Hide mascot">\u00d7</button></div>';
     document.body.appendChild(wrap);
     box = wrap.querySelector('#rsm-box'); bub = wrap.querySelector('#rsm-bub'); svg = wrap.querySelector('#rsm');
     roll = svg.querySelector('#rsm-roll'); face = svg.querySelector('#rsm-face'); eyes = svg.querySelector('#rsm-eyes'); mo = svg.querySelector('#rsm-mo');
     eL = svg.querySelector('#rsm-eL'); eR = svg.querySelector('#rsm-eR'); rL = eL.firstChild; rR = eR.firstChild;
 
     wrap.querySelector('#rsm-x').addEventListener('click', function (e) { e.stopPropagation(); hide(); });
-    var clicks = [['laughing', 'Hehe, that tickles!'], ['playful', "Hi! I'm here if you need me."], ['happy', 'Boop!']], ci = 0;
-    box.addEventListener('click', function () { var c = clicks[ci++ % clicks.length]; say(c[0], c[1], 3000); });
+    var clicks = [['laughing', 'Hehe, that tickles!'], ['playful', 'Drag me anywhere you like!'], ['happy', "Hi! I'm here if you need me."]], ci = 0;
+    box.addEventListener('click', function () { if (dragged) return; var c = clicks[ci++ % clicks.length]; say(c[0], c[1], 3000); });
+    setupDrag();
 
     ['pointermove', 'pointerdown', 'keydown', 'scroll', 'touchstart'].forEach(function (ev) {
       window.addEventListener(ev, function () { lastAct = Date.now(); if (name === 'drowsy' || name === 'sleeping') say('waking', '', 2600); }, { passive: true });
