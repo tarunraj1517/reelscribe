@@ -34,11 +34,38 @@ const Coupon      = require("./models/Coupon");
 const CouponRedemption = require("./models/CouponRedemption");
 const Razorpay    = require("razorpay");
 const crypto      = require("crypto");
-const FormData    = require("form-data");
+const { createAI } = require("./lib/ai");
+const { safeEqual, safeRedirectPath } = require("./lib/security");
+const { dayKey, monthKey } = require("./lib/quota");
+const { segmentsFromYoutube, segmentsFromWhisper, decodeEntities } = require("./lib/subtitles");
+const { createWebhookSender } = require("./lib/webhooks");
+const JobState = require("./models/JobState");
+const WebhookEndpoint = require("./models/WebhookEndpoint");
+const BrandKit = require("./models/BrandKit");
+const Team = require("./models/Team");
+const s3 = require("./services/s3Service");
 
 const resend  = new Resend(process.env.RESEND_API_KEY);
 const app     = express();
+
+// ── Async-safe routing ─────────────────────────────────────
+// Express 4 does not catch rejected promises from async handlers. A single unhandled DB error
+// in any async route used to hang the request and (on Node 15+) could crash the whole server.
+// This forwards every async rejection to the central error handler instead.
+for (const method of ["get", "post", "put", "patch", "delete"]) {
+  const original = app[method].bind(app);
+  app[method] = (route, ...handlers) => {
+    if (!handlers.length) return original(route); // app.get("setting")
+    return original(route, ...handlers.map(h =>
+      typeof h === "function" && h.length < 4
+        ? (req, res, next) => Promise.resolve(h(req, res, next)).catch(next)
+        : h));
+  };
+}
+process.on("unhandledRejection", (err) => console.error("[unhandledRejection]", err));
 const groq    = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const ai       = createAI(groq);
+const webhooks = createWebhookSender(WebhookEndpoint);
 const razorpay = new Razorpay({
   key_id:     process.env.RAZORPAY_KEY_ID,
   key_secret: process.env.RAZORPAY_KEY_SECRET,
@@ -66,7 +93,7 @@ app.use((req, res, next) => {
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
   res.setHeader("X-XSS-Protection", "0"); // deprecated in modern browsers; CSP below is the real defense
-  res.setHeader("Permissions-Policy", "camera=(), microphone=(self), geolocation=(), payment=(self)");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(self)");
   res.setHeader(
     "Content-Security-Policy",
     [
@@ -75,7 +102,7 @@ app.use((req, res, next) => {
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: https:",
       "font-src 'self' data:",
-      "connect-src 'self' https://api.razorpay.com",
+      "connect-src 'self' https://api.razorpay.com https://*.amazonaws.com",
       "frame-src https://api.razorpay.com https://checkout.razorpay.com",
       "object-src 'none'",
       "base-uri 'self'",
@@ -161,7 +188,15 @@ const authLimiter         = rateLimit({ windowMs: 60 * 1000, max: 10,  message: 
 const webhookLimiter      = rateLimit({ windowMs: 60 * 1000, max: 100, message: "Too many webhook calls." });
 
 app.use(express.static("public"));
+let sessionStore;
+try {
+  const MongoStore = require("connect-mongo");
+  sessionStore = MongoStore.create({ mongoUrl: process.env.MONGO_URI, collectionName: "sessions", ttl: 30 * 24 * 60 * 60 });
+} catch (e) {
+  console.warn("⚠️  connect-mongo not installed — falling back to in-memory sessions (users get logged out on every deploy). Run: npm install");
+}
 app.use(session({
+  store: sessionStore,
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
@@ -178,54 +213,6 @@ app.use(passport.session());
 function getSessionEmail(req) {
   return (req.user && req.user.email) || req.session?.userEmail || null;
 }
-
-// ── ReelScribe mascot AI assistant ────────────────────────────────────────
-// Session-aware but available to guests. Never expose API keys or private account
-// data to the browser; the client only receives a short assistant reply.
-const mascotChatHits = new Map();
-app.post("/api/mascot/chat", async (req, res) => {
-  try {
-    const now = Date.now();
-    const key = String(req.sessionID || req.ip || "guest");
-    const hit = mascotChatHits.get(key) || { start: now, count: 0 };
-    if (now - hit.start > 60 * 1000) { hit.start = now; hit.count = 0; }
-    hit.count += 1; mascotChatHits.set(key, hit);
-    if (hit.count > 12) return res.status(429).json({ success: false, error: "You're sending messages a little quickly. Please wait a minute and try again." });
-
-    const messages = Array.isArray(req.body?.messages) ? req.body.messages.slice(-8) : [];
-    const clean = messages.map(m => ({
-      role: m && m.role === "assistant" ? "assistant" : "user",
-      content: String(m && m.content || "").replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 1200)
-    })).filter(m => m.content.trim());
-    if (!clean.length || clean[clean.length - 1].role !== "user") return res.status(400).json({ success: false, error: "Please type a question first." });
-    if (!process.env.GROQ_API_KEY) return res.status(503).json({ success: false, error: "AI support is not configured yet. Please try again later or use the Contact page." });
-
-    let accountContext = "The visitor may be logged out; do not assume their plan or account status.";
-    const email = getSessionEmail(req);
-    if (email) {
-      const user = await User.findOne({ email }).select("plan credits planExpiresAt isSuspended").lean().catch(() => null);
-      if (user) accountContext = "Signed-in account context: plan=" + String(user.plan || "free") + "; credits=" + Number(user.credits || 0) + "; suspended=" + Boolean(user.isSuspended) + ". Do not reveal email, internal IDs, or private fields. Do not claim live usage counts unless provided.";
-    }
-    const pagePath = String(req.body?.page?.path || "").replace(/[^a-zA-Z0-9_./-]/g, "").slice(0, 100);
-    const pageTitle = String(req.body?.page?.title || "").replace(/[<>\u0000-\u001f]/g, " ").slice(0, 100);
-    const pageError = String(req.body?.page?.visibleError || "").replace(/[<>\u0000-\u001f]/g, " ").slice(0, 300);
-    const pageContext = pagePath ? `Current page context: ${pagePath}${pageTitle ? " (" + pageTitle + ")" : ""}. ${pageError ? "Visible error/status text: " + pageError + "." : ""} Use this only to tailor guidance; do not assume form contents or page data.` : "";
-    const system = `You are ReelScribe's friendly product support mascot. Reply naturally in the user's language (Hindi/Hinglish/English), concise and practical. Help with YouTube/Instagram video transcripts, AI clip generation, captions, downloads, plans, login, and troubleshooting. Be honest: never claim to have run an action, checked a job, or accessed live usage unless the request data explicitly provides it. Do not invent features, prices, status, or account usage. If a problem needs account-specific investigation, ask for the visible error message and direct the user to /contact.html. Never ask for passwords, OTPs, API keys, payment details, or other secrets. For actions, suggest safe navigation only; never claim to change subscriptions, payments, or account settings. Product facts: ReelScribe supports YouTube and Instagram links plus direct video uploads for transcripts; clip generation availability depends on plan. Current configured plan limits: Free transcript 2/day and 5/month, clips 0; Starter transcript 5/day and 30/month, clips 2/day and 10/month; Pro transcript 10/day and 60/month, clips 5/day and 15/month; Agency transcript 20/day and 150/month, clips 15/day and 60/month. Video limits: Starter 500 MB/40 min, Pro 1024 MB/70 min, Agency 2048 MB/120 min. Treat this as product guidance, not live usage. If unsure, say so. ${accountContext} ${pageContext}`;
-    const completion = await groq.chat.completions.create({
-      model: process.env.GROQ_CHAT_MODEL || "llama-3.3-70b-versatile",
-      messages: [{ role: "system", content: system }, ...clean],
-      temperature: 0.45,
-      max_tokens: 450
-    });
-    const reply = completion.choices?.[0]?.message?.content?.trim();
-    if (!reply) throw new Error("Empty assistant response");
-    res.json({ success: true, reply });
-  } catch (err) {
-    if (err?.status === 429) return res.status(429).json({ success: false, error: "AI support is busy right now. Please try again in a moment." });
-    console.error("[mascot-chat]", err?.message || err);
-    res.status(502).json({ success: false, error: "I couldn't reach AI support right now. Please try again, or visit Contact for help." });
-  }
-});
 
 async function requireAuth(req, res, next) {
   const email = getSessionEmail(req);
@@ -327,9 +314,11 @@ passport.use(new GoogleStrategy({
 }));
 
 const ALLOWED_VIDEO_MIME = new Set([
-  "video/mp4", "video/quicktime", "video/webm", "video/x-matroska", "video/x-msvideo", "video/3gpp",
+  "video/mp4", "video/quicktime", "video/webm", "video/x-matroska", "video/x-msvideo", "video/3gpp", "video/x-m4v",
+  "audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/wave", "audio/mp4", "audio/x-m4a", "audio/m4a",
+  "audio/aac", "audio/ogg", "audio/flac", "audio/x-flac", "audio/webm",
 ]);
-const ALLOWED_VIDEO_EXT = new Set([".mp4", ".mov", ".webm", ".mkv", ".avi", ".3gp"]);
+const ALLOWED_VIDEO_EXT = new Set([".mp4", ".mov", ".webm", ".mkv", ".avi", ".3gp", ".m4v", ".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"]);
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, "uploads/"),
@@ -369,7 +358,7 @@ function adminAuth(req, res, next) {
     return res.status(429).json({ success: false, error: `Too many incorrect attempts. Please try again in ${waitMin} minute${waitMin === 1 ? "" : "s"}.` });
   }
 
-  if (!process.env.ADMIN_SECRET || req.headers["x-admin-key"] !== process.env.ADMIN_SECRET) {
+  if (!process.env.ADMIN_SECRET || !safeEqual(req.headers["x-admin-key"], process.env.ADMIN_SECRET)) {
     if (!rec || now - rec.windowStart > ADMIN_WINDOW_MS) {
       adminAuthAttempts[ip] = { count: 1, windowStart: now, blockedUntil: null };
     } else {
@@ -392,7 +381,7 @@ setInterval(() => {
 }, 10 * 60 * 1000);
 
 function internalAuth(req, res, next) {
-  if (!INTERNAL_KEY || req.headers["x-internal-key"] !== INTERNAL_KEY)
+  if (!INTERNAL_KEY || !safeEqual(req.headers["x-internal-key"], INTERNAL_KEY))
     return res.status(401).json({ success: false, error: "Unauthorized" });
   next();
 }
@@ -463,15 +452,16 @@ function checkReferralCodeLimit(req) {
   return { allowed: true };
 }
 
+// Daily/monthly limits reset at midnight IST (the Render server clock is UTC, which used to
+// reset Indian users' "daily" limits at 5:30 AM).
 function isNewDay(lastDate) {
   if (!lastDate) return true;
-  return new Date(lastDate).toDateString() !== new Date().toDateString();
+  return dayKey(new Date(lastDate)) !== dayKey();
 }
 
 function isNewMonth(lastDate) {
   if (!lastDate) return true;
-  const l = new Date(lastDate), n = new Date();
-  return l.getMonth() !== n.getMonth() || l.getFullYear() !== n.getFullYear();
+  return monthKey(new Date(lastDate)) !== monthKey();
 }
 
 async function checkGuestLimit(req) {
@@ -510,13 +500,28 @@ async function getInstagramVideoUrl(instagramUrl) {
   throw new Error("Couldn't find a video at that URL.");
 }
 
-function downloadVideo(videoUrl, outputPath) {
-  return new Promise((resolve, reject) => {
+class HttpError extends Error {
+  constructor(status, message) { super(message); this.status = status; }
+}
+
+async function downloadVideo(videoUrl, outputPath, maxBytes = 25 * 1024 * 1024) {
+  let u;
+  try { u = new URL(videoUrl); } catch { throw new Error("Bad media URL"); }
+  if (u.protocol !== "https:") throw new Error("Media URL must be https");
+  const response = await axios.get(videoUrl, { responseType: "stream", timeout: 60000, maxRedirects: 3, maxContentLength: maxBytes, validateStatus: s => s === 200 });
+  const declared = Number(response.headers["content-length"] || 0);
+  if (declared > maxBytes) { response.data.destroy(); throw new HttpError(413, "This video is larger than 25 MB, so it can't be transcribed from a link. Please upload a shorter clip or the audio only."); }
+  await new Promise((resolve, reject) => {
     const file = fs.createWriteStream(outputPath);
-    https.get(videoUrl, (response) => {
-      response.pipe(file);
-      file.on("finish", () => { file.close(); resolve(); });
-    }).on("error", (err) => { fs.unlink(outputPath, () => {}); reject(err); });
+    let received = 0;
+    response.data.on("data", chunk => {
+      received += chunk.length;
+      if (received > maxBytes) { response.data.destroy(new HttpError(413, "This video is larger than 25 MB, so it can't be transcribed from a link. Please upload a shorter clip or the audio only.")); }
+    });
+    response.data.on("error", err => { file.destroy(); fs.unlink(outputPath, () => {}); reject(err); });
+    file.on("error", reject);
+    file.on("finish", resolve);
+    response.data.pipe(file);
   });
 }
 
@@ -743,17 +748,84 @@ async function checkTranscriptLimit(user) {
   return { allowed: true };
 }
 
-async function updateTranscriptUsage(user) {
-  const now = new Date();
-  const resetDay   = isNewDay(user.lastTranscriptDate);
-  const resetMonth = isNewMonth(user.lastTranscriptResetDate);
+async function checkClipLimit(user) {
+  const plan   = getEffectivePlan(user);
+  const limits = PLAN_LIMITS[plan];
 
-  await User.findByIdAndUpdate(user._id, {
-    transcriptsUsedToday:    resetDay   ? 1 : (user.transcriptsUsedToday || 0) + 1,
-    transcriptsUsedMonth:    resetMonth ? 1 : (user.transcriptsUsedMonth || 0) + 1,
-    lastTranscriptDate:      now,
-    lastTranscriptResetDate: resetMonth ? now : user.lastTranscriptResetDate,
-  });
+  let usedDay   = user.clipsUsedToday || 0;
+  let usedMonth = user.clipsUsedMonth || 0;
+
+  if (isNewDay(user.lastClipDate))   usedDay   = 0;
+  if (isNewMonth(user.lastClipDate)) usedMonth = 0;
+
+  if (usedDay >= limits.clipDay)
+    return { allowed: false, error: `Daily clip limit reached (${limits.clipDay}/day). Come back tomorrow or upgrade your plan.` };
+  if (usedMonth >= limits.clipMonth)
+    return { allowed: false, error: `Monthly clip limit reached (${limits.clipMonth}/month). Upgrade your plan for more.` };
+
+  return { allowed: true };
+}
+
+const USAGE_FIELDS = {
+  transcript: { day: "transcriptsUsedToday", month: "transcriptsUsedMonth", lastDay: "lastTranscriptDate", lastMonth: "lastTranscriptResetDate", dayLimit: "transcriptDay", monthLimit: "transcriptMonth" },
+  clip:       { day: "clipsUsedToday",       month: "clipsUsedMonth",       lastDay: "lastClipDate",       lastMonth: "lastClipDate",            dayLimit: "clipDay",       monthLimit: "clipMonth" },
+};
+
+// MongoDB expressions: "how many used today / this month" accounting for the IST rollover.
+function usageExprs(f) {
+  const today = dayKey(), month = monthKey();
+  const fmt = (field, format) => ({ $dateToString: { format, date: { $ifNull: [`$${field}`, new Date(0)] }, timezone: "+05:30" } });
+  return {
+    sameDay:   { $eq: [fmt(f.lastDay, "%Y-%m-%d"), today] },
+    sameMonth: { $eq: [fmt(f.lastMonth, "%Y-%m"), month] },
+    usedDay:   { $cond: [{ $eq: [fmt(f.lastDay, "%Y-%m-%d"), today] }, { $ifNull: [`$${f.day}`, 0] }, 0] },
+    usedMonth: { $cond: [{ $eq: [fmt(f.lastMonth, "%Y-%m"), month] }, { $ifNull: [`$${f.month}`, 0] }, 0] },
+  };
+}
+
+// Atomically reserve one unit of usage. Two parallel requests can no longer both squeeze past a limit.
+// Reserve BEFORE doing the expensive work and refund on failure.
+async function reserveUsage(user, kind) {
+  const f = USAGE_FIELDS[kind];
+  const limits = PLAN_LIMITS[getEffectivePlan(user)];
+  const dayLimit = limits[f.dayLimit], monthLimit = limits[f.monthLimit];
+  if (!dayLimit || !monthLimit) return false;
+  const e = usageExprs(f);
+  const now = new Date();
+  const set = {
+    [f.day]:   { $add: [e.usedDay, 1] },
+    [f.month]: { $add: [e.usedMonth, 1] },
+    [f.lastDay]: now,
+  };
+  if (f.lastMonth !== f.lastDay) set[f.lastMonth] = { $cond: [e.sameMonth, `$${f.lastMonth}`, now] };
+  const res = await User.collection.findOneAndUpdate(
+    { _id: user._id, $expr: { $and: [{ $lt: [e.usedDay, dayLimit] }, { $lt: [e.usedMonth, monthLimit] }] } },
+    [{ $set: set }],
+    { returnDocument: "after" }
+  );
+  const doc = res && (res.value !== undefined ? res.value : res);
+  return !!(doc && doc._id);
+}
+
+async function refundUsage(user, kind) {
+  const f = USAGE_FIELDS[kind];
+  await User.collection.updateOne(
+    { _id: user._id },
+    [{ $set: {
+      [f.day]:   { $max: [0, { $subtract: [{ $ifNull: [`$${f.day}`, 0] }, 1] }] },
+      [f.month]: { $max: [0, { $subtract: [{ $ifNull: [`$${f.month}`, 0] }, 1] }] },
+    } }]
+  ).catch(() => {});
+}
+
+// Unconditional +1 (used by the internal EC2 callback).
+async function bumpUsage(user, kind) {
+  const f = USAGE_FIELDS[kind];
+  const e = usageExprs(f);
+  const now = new Date();
+  const set = { [f.day]: { $add: [e.usedDay, 1] }, [f.month]: { $add: [e.usedMonth, 1] }, [f.lastDay]: now };
+  if (f.lastMonth !== f.lastDay) set[f.lastMonth] = { $cond: [e.sameMonth, `$${f.lastMonth}`, now] };
+  await User.collection.updateOne({ _id: user._id }, [{ $set: set }]);
 }
 
 app.get("/internal/user-limits/:email", internalAuth, async (req, res) => {
@@ -774,17 +846,7 @@ app.post("/internal/update-usage", internalAuth, async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ success: false });
 
-    const now        = new Date();
-    const resetDay   = isNewDay(user.lastClipDate);
-    const resetMonth = isNewMonth(user.lastClipDate);
-
-    if (type === "clip") {
-      await User.findByIdAndUpdate(user._id, {
-        clipsUsedToday:  resetDay   ? 1 : (user.clipsUsedToday || 0) + 1,
-        clipsUsedMonth:  resetMonth ? 1 : (user.clipsUsedMonth || 0) + 1,
-        lastClipDate:    now,
-      });
-    }
+    if (type === "clip") await bumpUsage(user, "clip");
 
     res.json({ success: true });
   } catch (e) {
@@ -795,7 +857,7 @@ app.post("/internal/update-usage", internalAuth, async (req, res) => {
 
 app.get("/auth/google", (req, res, next) => {
   const next_ = req.query.next;
-  const dest = (typeof next_ === "string" && next_.startsWith("/")) ? next_ : "/dashboard.html";
+  const dest = safeRedirectPath(next_, "/dashboard.html");
   const referralCode = req.session.referralCode || "";
   const state = JSON.stringify({ dest, referralCode });
   passport.authenticate("google", { scope: ["profile", "email"], state })(req, res, next);
@@ -808,10 +870,10 @@ app.get("/auth/google/callback",
     let dest = "/dashboard.html";
     try {
       const parsed = JSON.parse(String(req.query.state || "{}"));
-      if (typeof parsed.dest === "string" && parsed.dest.startsWith("/")) dest = parsed.dest;
+      dest = safeRedirectPath(parsed.dest, dest);
     } catch (e) {
       const state_ = req.query.state;
-      if (typeof state_ === "string" && state_.startsWith("/")) dest = state_;
+      dest = safeRedirectPath(state_, dest);
     }
     delete req.session.referralCode;
     const sep = dest.includes("?") ? "&" : "?";
@@ -909,56 +971,134 @@ app.post("/verify-otp", authLimiter, async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════
+//  TRANSCRIPTION CORE
+// ═══════════════════════════════════════════════════════
+async function groqTranscribe(filePath) {
+  const make = (extra) => groq.audio.transcriptions.create({ file: fs.createReadStream(filePath), model: "whisper-large-v3-turbo", ...extra });
+  try {
+    // verbose_json gives timestamps, which power SRT/VTT export and chapters.
+    const t = await make({ response_format: "verbose_json", timestamp_granularities: ["segment"] });
+    return { text: String(t.text || "").trim(), segments: segmentsFromWhisper(t.segments), language: String(t.language || "") };
+  } catch (e) {
+    if (e?.status !== 400 && e?.status !== 422) throw e;
+    const t = await make({});
+    return { text: String(t.text || "").trim(), segments: [], language: "" };
+  }
+}
+
+// Pure fetch+transcribe for a URL (no limits/accounting) — shared by the website and the public API.
+async function fetchUrlTranscript(url) {
+  if (isValidYouTubeUrl(url)) {
+    const videoId = getYouTubeVideoId(url);
+    if (!videoId) throw new HttpError(400, "Invalid YouTube URL");
+    let items;
+    try { items = await YoutubeTranscript.fetchTranscript(videoId); }
+    catch (error) {
+      console.error("[transcribe-url] YouTube fetch failed:", error);
+      throw new HttpError(500, "Couldn't fetch the transcript for this video. Please check the link and try again.");
+    }
+    if (!items?.length) throw new HttpError(400, "This video doesn't have any captions available.");
+    const segments = segmentsFromYoutube(items);
+    const text = segments.map(x => x.text).join(" ").replace(/\s+/g, " ").trim();
+    if (!text) throw new HttpError(400, "This video doesn't have any captions available.");
+    return { text, segments, language: String(items[0]?.lang || ""), source: "youtube-captions" };
+  }
+  if (isValidInstagramUrl(url)) {
+    const outputPath = path.join(__dirname, "uploads", `${Date.now()}_${crypto.randomBytes(4).toString("hex")}_insta.mp4`);
+    try {
+      const videoUrl = await getInstagramVideoUrl(url);
+      await downloadVideo(videoUrl, outputPath);
+      const r = await groqTranscribe(outputPath);
+      return { ...r, source: "groq-whisper" };
+    } catch (error) {
+      if (error instanceof HttpError) throw error;
+      console.error("[transcribe-url] Instagram fetch failed:", error);
+      throw new HttpError(500, "Couldn't fetch this Instagram video. Please check the link and try again.");
+    } finally {
+      fs.promises.unlink(outputPath).catch(() => {});
+    }
+  }
+  throw new HttpError(400, "Only valid YouTube and Instagram URLs are supported.");
+}
+
+async function limitMessage(user, kind) {
+  const c = kind === "clip" ? await checkClipLimit(user) : await checkTranscriptLimit(user);
+  return c.allowed ? "You've reached your limit for now. Please try again shortly or upgrade your plan." : c.error;
+}
+
+function transcriptResponse({ isGuest, text, user, source, reelId }) {
+  const words = text.split(/\s+/).filter(Boolean);
+  const isPreview = isGuest && words.length > 100;
+  return {
+    success: true,
+    transcript: isGuest ? words.slice(0, 100).join(" ") : text,
+    isGuest, isPreview,
+    totalWords: words.length,
+    creditsLeft: isGuest ? 0 : user.credits,
+    source,
+    reelId: reelId ? String(reelId) : null,
+  };
+}
+
+// Persist a finished transcript for a signed-in user and fire side effects (referral + webhook).
+async function saveTranscriptForUser(user, { url, text, segments, language, source }) {
+  const reel = await Reel.create({ userEmail: user.email, reelUrl: url, transcript: text, segments, language, source });
+  await creditReferralAfterFirstTranscript(user, text.split(/\s+/).filter(Boolean).length).catch(e => console.error("[referral] credit failed:", e.message));
+  webhooks.send(user.email, "transcript.completed", { id: String(reel._id), source, url, words: text.split(/\s+/).filter(Boolean).length });
+  return reel;
+}
+
+// Shared by the website and the public API: limit-checked URL transcription for a signed-in user.
+async function runUserUrlTranscription(user, url) {
+  if (!(await reserveUsage(user, "transcript"))) throw new HttpError(403, await limitMessage(user, "transcript"));
+  try {
+    const r = await fetchUrlTranscript(url);
+    const reel = await saveTranscriptForUser(user, { url, ...r });
+    return { reel, ...r };
+  } catch (e) {
+    await refundUsage(user, "transcript");
+    throw e;
+  }
+}
+
 app.post("/transcribe", transcribeLimiter, upload.single("video"), async (req, res) => {
+  const filePath = req.file?.path;
   try {
     if (!req.file) return res.status(400).json({ success: false, error: "No file was uploaded." });
 
     const email   = getSessionEmail(req);
     const user    = email ? await User.findOne({ email }) : null;
     const isGuest = !user;
+    if (user?.isSuspended) return res.status(403).json({ success: false, suspended: true, error: "Your account is currently suspended. Please contact support." });
 
+    let reserved = false;
     if (isGuest) {
       const { allowed } = await checkGuestLimit(req);
-      if (!allowed) {
-        if (req.file?.path) fs.unlinkSync(req.file.path);
-        return res.status(403).json({ success: false, loginRequired: true, forceLogin: true, error: "You've used all 3 free previews. Please log in to continue." });
-      }
+      if (!allowed) return res.status(403).json({ success: false, loginRequired: true, forceLogin: true, error: "You've used all 3 free previews. Please log in to continue." });
     } else {
-      const limitCheck = await checkTranscriptLimit(user);
-      if (!limitCheck.allowed) {
-        fs.unlinkSync(req.file.path);
-        return res.status(403).json({ success: false, error: limitCheck.error });
+      if (!(await reserveUsage(user, "transcript"))) return res.status(403).json({ success: false, error: await limitMessage(user, "transcript") });
+      reserved = true;
+    }
+
+    try {
+      const r = await groqTranscribe(filePath);
+      if (!r.text) throw new Error("Empty transcription");
+      let reelId = null;
+      if (!isGuest) {
+        const reel = await saveTranscriptForUser(user, { url: req.file.originalname, ...r, source: "groq-whisper" });
+        reelId = reel._id;
       }
+      return res.json(transcriptResponse({ isGuest, text: r.text, user, source: "groq-whisper", reelId }));
+    } catch (error) {
+      if (reserved) await refundUsage(user, "transcript");
+      throw error;
     }
-
-    const transcription = await groq.audio.transcriptions.create({
-      file:  fs.createReadStream(req.file.path),
-      model: "whisper-large-v3-turbo",
-    });
-
-    if (!isGuest) {
-      await updateTranscriptUsage(user);
-      await creditReferralAfterFirstTranscript(user, transcription.text.split(/\s+/).filter(Boolean).length);
-      await Reel.create({ userEmail: email, reelUrl: req.file.originalname, transcript: transcription.text });
-    }
-
-    fs.unlinkSync(req.file.path);
-
-    const words    = transcription.text.split(/\s+/);
-    const isPreview = isGuest && words.length > 100;
-
-    res.json({
-      success:     true,
-      transcript:  isGuest ? words.slice(0, 100).join(" ") : transcription.text,
-      isGuest,
-      isPreview,
-      totalWords:  words.length,
-      creditsLeft: user ? user.credits : 0,
-    });
   } catch (error) {
-    if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     console.error("[/transcribe] failed:", error);
     res.status(500).json({ success: false, error: "We couldn't process this video. Please try again or use a different file." });
+  } finally {
+    if (filePath) fs.promises.unlink(filePath).catch(() => {});
   }
 });
 
@@ -966,220 +1106,222 @@ app.post("/transcribe-url", transcribeLimiter, async (req, res) => {
   const { url } = req.body;
   if (typeof url !== "string" || !url)
     return res.status(400).json({ success: false, error: "Please provide a video URL." });
-
-  const isYouTube = isValidYouTubeUrl(url);
-  const isInstagram = isValidInstagramUrl(url);
-  if (!isYouTube && !isInstagram)
+  if (!isValidYouTubeUrl(url) && !isValidInstagramUrl(url))
     return res.status(400).json({ success: false, error: "Only valid YouTube and Instagram URLs are supported." });
 
   const email   = getSessionEmail(req);
   const user    = email ? await User.findOne({ email }) : null;
   const isGuest = !user;
+  if (user?.isSuspended) return res.status(403).json({ success: false, suspended: true, error: "Your account is currently suspended. Please contact support." });
 
-  if (isGuest) {
-    const { allowed } = await checkGuestLimit(req);
-    if (!allowed) return res.status(403).json({ success: false, loginRequired: true, forceLogin: true, error: "You've used all 3 free previews. Please log in to continue." });
-  } else {
-    const limitCheck = await checkTranscriptLimit(user);
-    if (!limitCheck.allowed) return res.status(403).json({ success: false, error: limitCheck.error });
-  }
-
-  function buildResponse(fullTranscript, source) {
-    const words     = fullTranscript.split(/\s+/);
-    const isPreview = isGuest && words.length > 100;
-    return {
-      success:     true,
-      transcript:  isGuest ? words.slice(0, 100).join(" ") : fullTranscript,
-      isGuest, isPreview,
-      totalWords:  words.length,
-      creditsLeft: isGuest ? 0 : user.credits,
-      source,
-    };
-  }
-
-  if (isYouTube) {
-    try {
-      const videoId = getYouTubeVideoId(url);
-      if (!videoId) return res.status(400).json({ success: false, error: "Invalid YouTube URL" });
-
-      const transcriptArr = await YoutubeTranscript.fetchTranscript(videoId);
-      if (!transcriptArr?.length)
-        return res.status(400).json({ success: false, error: "This video doesn't have any captions available." });
-
-      const transcript = transcriptArr.map(i => i.text).join(" ").replace(/\s+/g, " ").trim();
-
-      if (!isGuest) {
-        await updateTranscriptUsage(user);
-        await creditReferralAfterFirstTranscript(user, transcript.split(/\s+/).filter(Boolean).length);
-        await Reel.create({ userEmail: email, reelUrl: url, transcript });
-      }
-
-      return res.json(buildResponse(transcript, "youtube-captions"));
-    } catch (error) {
-      console.error("[/transcribe-url] YouTube fetch failed:", error);
-      return res.status(500).json({ success: false, error: "Couldn't fetch the transcript for this video. Please check the link and try again." });
-    }
-  }
-
-  const outputPath = path.join(__dirname, "uploads", `${Date.now()}_insta.mp4`);
   try {
-    const videoUrl = await getInstagramVideoUrl(url);
-    await downloadVideo(videoUrl, outputPath);
-
-    const transcription = await groq.audio.transcriptions.create({
-      file:  fs.createReadStream(outputPath),
-      model: "whisper-large-v3-turbo",
-    });
-
-    if (!isGuest) {
-      await updateTranscriptUsage(user);
-      await creditReferralAfterFirstTranscript(user, transcription.text.split(/\s+/).filter(Boolean).length);
-      await Reel.create({ userEmail: email, reelUrl: url, transcript: transcription.text });
+    if (isGuest) {
+      const { allowed } = await checkGuestLimit(req);
+      if (!allowed) return res.status(403).json({ success: false, loginRequired: true, forceLogin: true, error: "You've used all 3 free previews. Please log in to continue." });
+      const r = await fetchUrlTranscript(url);
+      return res.json(transcriptResponse({ isGuest: true, text: r.text, user: null, source: r.source }));
     }
-
-    fs.unlinkSync(outputPath);
-    return res.json(buildResponse(transcription.text, "groq-whisper"));
+    const r = await runUserUrlTranscription(user, url);
+    return res.json(transcriptResponse({ isGuest: false, text: r.text, user, source: r.source, reelId: r.reel._id }));
   } catch (error) {
-    if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
-    console.error("[/transcribe-url] Instagram fetch failed:", error);
-    return res.status(500).json({ success: false, error: "Couldn't fetch this Instagram video. Please check the link and try again." });
+    if (error instanceof HttpError) return res.status(error.status).json({ success: false, error: error.message });
+    console.error("[/transcribe-url] failed:", error);
+    return res.status(500).json({ success: false, error: "Couldn't fetch the transcript for this video. Please check the link and try again." });
   }
 });
 
-async function checkClipLimit(user) {
-  const plan   = getEffectivePlan(user);
-  const limits = PLAN_LIMITS[plan];
+// ═══════════════════════════════════════════════════════
+//  CLIP JOBS (persisted in MongoDB, survive restarts)
+// ═══════════════════════════════════════════════════════
+const INSTANCE_ID = crypto.randomUUID();
+const clipJobs = {
+  create: (jobId, email, via, reservedKind) => JobState.create({ jobId, email, via, reservedKind, ownerId: INSTANCE_ID, status: "processing" }),
+  finish: (jobId, patch) => JobState.updateOne({ jobId }, { $set: patch }),
+  get:    (jobId) => JobState.findOne({ jobId }).lean(),
+};
 
-  let usedDay   = user.clipsUsedToday || 0;
-  let usedMonth = user.clipsUsedMonth || 0;
+// Running instances keep their jobs alive with a heartbeat. A job whose heartbeat goes stale was
+// lost in a restart/crash: mark it failed and give the user their clip back.
+setInterval(() => JobState.updateMany({ ownerId: INSTANCE_ID, status: "processing" }, { $set: { heartbeatAt: new Date() } }).catch(() => {}), 30 * 1000).unref();
+setInterval(async () => {
+  try {
+    const stale = await JobState.find({ status: "processing", heartbeatAt: { $lt: new Date(Date.now() - 2 * 60 * 1000) } }).limit(50);
+    for (const job of stale) {
+      const claimed = await JobState.findOneAndUpdate({ _id: job._id, status: "processing" }, { $set: { status: "error", error: "This job was interrupted by a server restart. Your clip allowance was not used — please try again." } });
+      if (!claimed) continue;
+      if (job.reservedKind === "clip") {
+        const u = await User.findOne({ email: job.email }).select("_id plan planExpiresAt");
+        if (u) await refundUsage(u, "clip");
+      }
+      webhooks.send(job.email, "clip.failed", { jobId: job.jobId, error: "interrupted" });
+    }
+  } catch (e) { console.error("[job-sweeper] failed:", e.message); }
+}, 60 * 1000).unref();
 
-  if (isNewDay(user.lastClipDate))   usedDay   = 0;
-  if (isNewMonth(user.lastClipDate)) usedMonth = 0;
-
-  if (usedDay >= limits.clipDay)
-    return { allowed: false, error: `Daily clip limit reached (${limits.clipDay}/day). Come back tomorrow or upgrade your plan.` };
-  if (usedMonth >= limits.clipMonth)
-    return { allowed: false, error: `Monthly clip limit reached (${limits.clipMonth}/month). Upgrade your plan for more.` };
-
-  return { allowed: true };
-}
-
-async function updateClipUsage(user) {
-  const now        = new Date();
-  const resetDay   = isNewDay(user.lastClipDate);
-  const resetMonth = isNewMonth(user.lastClipDate);
-
-  await User.findByIdAndUpdate(user._id, {
-    clipsUsedToday: resetDay   ? 1 : (user.clipsUsedToday || 0) + 1,
-    clipsUsedMonth: resetMonth ? 1 : (user.clipsUsedMonth || 0) + 1,
-    lastClipDate:   now,
-  });
-}
-
-const clipJobs = new Map();
-
-function scheduleJobCleanup(jobId) {
-  setTimeout(() => clipJobs.delete(jobId), 30 * 60 * 1000);
-}
-
-app.get("/clip-status/:jobId", requireAuth, (req, res) => {
-  const job = clipJobs.get(req.params.jobId);
+app.get("/clip-status/:jobId", requireAuth, async (req, res) => {
+  const job = await clipJobs.get(req.params.jobId);
   if (!job) return res.status(404).json({ success: false, error: "Job not found or expired" });
   if (job.email !== req.authEmail) return res.status(403).json({ success: false, error: "You do not have access to this job." });
-  const { email, ...safeJob } = job;
-  res.json({ success: true, ...safeJob });
+  res.json({ success: true, status: job.status, error: job.error || undefined, clips: job.status === "done" ? job.clips : undefined, historyId: job.historyId || undefined });
 });
 
-app.post("/cut-clips", clipLimiter, requireAuth, async (req, res) => {
-  const { ytUrl, fcmToken, captionSettings } = req.body;
-  const email = req.authEmail;
+// Only forward known, bounded caption options to the render service.
+function sanitizeCaptionSettings(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return { captionsEnabled: true };
+  const str = (v, n = 40) => (typeof v === "string" ? v.slice(0, n) : undefined);
+  const num = (v, min, max) => (Number.isFinite(Number(v)) ? Math.min(max, Math.max(min, Number(v))) : undefined);
+  if (input.captionsEnabled === false) return { captionsEnabled: false };
+  const out = {
+    captionsEnabled: true,
+    style: str(input.style), language: str(input.language, 20), animation: str(input.animation),
+    captionMode: str(input.captionMode), maxWordsPerLine: num(input.maxWordsPerLine, 1, 12),
+    emojiReactions: typeof input.emojiReactions === "boolean" ? input.emojiReactions : undefined,
+    emojiPosition: str(input.emojiPosition, 20), aspectRatio: str(input.aspectRatio, 12), quality: str(input.quality, 12),
+  };
+  if (input.position && typeof input.position === "object") out.position = { type: str(input.position.type, 20), marginFromBottom: num(input.position.marginFromBottom, 0, 1500) };
+  if (input.reframe && typeof input.reframe === "object") out.reframe = { mode: input.reframe.mode === "focus" ? "focus" : "center", focusX: num(input.reframe.focusX, 0, 100) ?? 50 };
+  return JSON.parse(JSON.stringify(out));
+}
 
-  if (!isValidYouTubeUrl(ytUrl)) return res.status(400).json({ success: false, error: "Please provide a valid YouTube URL." });
+// A user's own brand kit (Agency) or the kit of the team they belong to.
+async function resolveBrandKit(user) {
+  const plan = getEffectivePlan(user);
+  let kit = null;
+  if (plan === "agency") kit = await BrandKit.findOne({ ownerEmail: user.email }).lean();
+  if (!kit) {
+    const team = await Team.findOne({ members: { $elemMatch: { email: user.email, status: "active" } } }).select("ownerEmail").lean();
+    if (team) kit = await BrandKit.findOne({ ownerEmail: team.ownerEmail }).lean();
+  }
+  if (!kit) return null;
+  return {
+    brandName: kit.brandName, handle: kit.handle, primaryColor: kit.primaryColor, accentColor: kit.accentColor,
+    fontName: kit.fontName, logoUrl: kit.logoEnabled ? kit.logoUrl : "", logoPosition: kit.logoPosition, outroText: kit.outroText,
+  };
+}
 
-  const user = await User.findOne({ email });
-  if (!user) return res.status(401).json({ success: false, loginRequired: true, error: "Account not found. Please log in again." });
+const uploadPrefix = (email) => `uploads/${require("./lib/security").sha256(String(email).toLowerCase()).slice(0, 16)}/`;
 
+function mapClip(c, meta, captionSettings) {
+  return {
+    title: String(c.title || "").slice(0, 200), reason: String(c.reason || "").slice(0, 500), duration: Number(c.duration) || 0,
+    url: c.url, s3Key: c.s3Key,
+    sourceKey: String(c.sourceKey || c.masterKey || ""),
+    captionSettings,
+    score: meta?.score ?? null, scoreNote: meta?.scoreNote || "", hook: meta?.hook || "",
+    description: meta?.description || "", hashtags: meta?.hashtags || [],
+  };
+}
+
+// Starts a clip job for a signed-in user. Used by the website (/cut-clips) and the public API.
+// source = { type: "youtube", url } | { type: "upload", key }
+async function startClipJob({ user, source, captionSettings, via = "web" }) {
+  const email = user.email;
   const plan = getEffectivePlan(user);
   const referralAvailable = (user.referralCuts || 0) > 0;
   let useReferral = false;
+  let reserved = false;
+
+  if (source.type === "youtube" && !isValidYouTubeUrl(source.url)) return { status: 400, body: { success: false, error: "Please provide a valid YouTube URL." } };
+  if (source.type === "upload" && !String(source.key || "").startsWith(uploadPrefix(email))) return { status: 400, body: { success: false, error: "Invalid upload reference. Please upload the file again." } };
 
   if (plan === "free") {
     if (!referralAvailable)
-      return res.status(403).json({ success: false, error: "Clips aren't available on the free plan. Refer a friend to earn 1 free cut, or upgrade to continue." });
+      return { status: 403, body: { success: false, error: "Clips aren't available on the free plan. Refer a friend to earn 1 free cut, or upgrade to continue." } };
     useReferral = true;
+  } else if (await reserveUsage(user, "clip")) {
+    reserved = true;
   } else {
-    const limitCheck = await checkClipLimit(user);
-    if (!limitCheck.allowed) {
-      if (!referralAvailable) return res.status(403).json({ success: false, error: limitCheck.error });
-      useReferral = true;
-    }
+    if (!referralAvailable) return { status: 403, body: { success: false, error: await limitMessage(user, "clip") } };
+    useReferral = true;
   }
 
   const processingPlan = useReferral ? "starter" : plan;
-  const maxMinutes = PLAN_LIMITS[processingPlan].maxVideoMinutes;
-  const durationSec = await getYouTubeDurationSeconds(ytUrl);
-  if (durationSec !== null && durationSec > maxMinutes * 60) {
-    const videoMinutes = Math.ceil(durationSec / 60);
-    return res.status(403).json({
-      success: false,
-      error: `This video is ${videoMinutes} min long. The ${useReferral ? "referral cut" : processingPlan + " plan"} supports videos up to ${maxMinutes} min. Try a shorter video or upgrade your plan.`,
-    });
+  const refund = async () => { if (reserved) await refundUsage(user, "clip"); };
+
+  if (source.type === "youtube") {
+    const maxMinutes = PLAN_LIMITS[processingPlan].maxVideoMinutes;
+    const durationSec = await getYouTubeDurationSeconds(source.url);
+    if (durationSec !== null && durationSec > maxMinutes * 60) {
+      await refund();
+      const videoMinutes = Math.ceil(durationSec / 60);
+      return { status: 403, body: { success: false, error: `This video is ${videoMinutes} min long. The ${useReferral ? "referral cut" : processingPlan + " plan"} supports videos up to ${maxMinutes} min. Try a shorter video or upgrade your plan.` } };
+    }
   }
 
+  const settings = sanitizeCaptionSettings(captionSettings);
+  const brandKit = useReferral ? null : await resolveBrandKit(user);
   const jobId = crypto.randomUUID();
-  clipJobs.set(jobId, { status: "processing", email });
-  res.json({ success: true, jobId });
+  await clipJobs.create(jobId, email, via, reserved ? "clip" : "referral");
 
-  (async () => {
-    try {
-      const ec2Response = await axios.post(
-        `${EC2_URL}/analyze-video`,
-        { url: ytUrl, captionSettings, plan: processingPlan, referralCut: useReferral, watermark: useReferral },
-        { headers: { "x-internal-key": INTERNAL_KEY }, timeout: 900000 }
-      );
+  runClipJob({ jobId, user, source, settings, brandKit, processingPlan, useReferral, reserved }).catch(e => console.error("[clip-job] crashed:", e));
+  return { status: 200, body: { success: true, jobId } };
+}
 
-      if (!ec2Response.data?.success) {
-        clipJobs.set(jobId, { status: "error", email, error: ec2Response.data?.error || "Clip generation failed. Please try again." });
-        return scheduleJobCleanup(jobId);
+async function runClipJob({ jobId, user, source, settings, brandKit, processingPlan, useReferral, reserved }) {
+  const email = user.email;
+  const fail = async (message) => {
+    if (reserved) await refundUsage(user, "clip");
+    await clipJobs.finish(jobId, { status: "error", error: message });
+    webhooks.send(email, "clip.failed", { jobId, error: message });
+  };
+  try {
+    const ec2Response = await axios.post(
+      `${EC2_URL}/analyze-video`,
+      {
+        ...(source.type === "youtube" ? { url: source.url } : { sourceKey: source.key }),
+        sourceType: source.type, captionSettings: settings, brandKit,
+        plan: processingPlan, referralCut: useReferral, watermark: useReferral,
+      },
+      { headers: { "x-internal-key": INTERNAL_KEY }, timeout: 900000 }
+    );
+
+    if (!ec2Response.data?.success) return fail(ec2Response.data?.error || "Clip generation failed. Please try again.");
+
+    const rawClips = (ec2Response.data.clips || []).filter(c => c && c.url && c.s3Key);
+    if (!rawClips.length) return fail("No clips came back — try a different video.");
+
+    // AI virality score / hook / hashtags (never blocks or fails the job).
+    let metas = [];
+    try { metas = await Promise.race([ai.scoreClips(rawClips), new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 30000))]); }
+    catch (e) { console.warn("[clip-job] AI scoring skipped:", e.message); }
+    const clips = rawClips.map((c, i) => mapClip(c, metas[i], settings));
+
+    if (useReferral) {
+      const consumed = await User.findOneAndUpdate({ _id: user._id, referralCuts: { $gt: 0 } }, { $inc: { referralCuts: -1 } }, { new: true });
+      if (!consumed) {
+        // A concurrent request used the last reward; don't silently grant a free cut.
+        await axios.post(`${EC2_URL}/delete-clips`, { keys: rawClips.map(c => c.s3Key) }, { headers: { "x-internal-key": INTERNAL_KEY }, timeout: 30000 }).catch(() => {});
+        return fail("Your referral cut was already used. Please try again.");
       }
-
-      const clips = ec2Response.data.clips || [];
-      if (useReferral && clips.length > 0) {
-        const consumed = await User.findOneAndUpdate(
-          { _id: user._id, referralCuts: { $gt: 0 } },
-          { $inc: { referralCuts: -1 } },
-          { new: true }
-        );
-        if (!consumed) {
-          // A concurrent request used the last reward; don't silently grant a free cut.
-          await axios.post(`${EC2_URL}/delete-clips`, { keys: clips.map(c => c.s3Key).filter(Boolean) },
-            { headers: { "x-internal-key": INTERNAL_KEY }, timeout: 30000 }).catch(() => {});
-          clipJobs.set(jobId, { status: "error", email, error: "Your referral cut was already used. Please try again." });
-          return scheduleJobCleanup(jobId);
-        }
-      } else if (!useReferral) {
-        await updateClipUsage(user);
-      }
-      clipJobs.set(jobId, { status: "done", email, clips });
-      scheduleJobCleanup(jobId);
-
-      if (clips.length > 0) {
-        await ClipJob.create({
-          userEmail: email,
-          ytUrl,
-          ytTitle: ec2Response.data.videoTitle || "",
-          clips: clips.map(c => ({
-            title: c.title, reason: c.reason, duration: c.duration,
-            url: c.url, s3Key: c.s3Key
-          }))
-        });
-      }
-    } catch (err) {
-      console.error(`[/cut-clips] job ${jobId} failed:`, err.response?.data || err.message || err);
-      clipJobs.set(jobId, { status: "error", email, error: "Clip generation failed. Please try again." });
-      scheduleJobCleanup(jobId);
     }
-  })();
+
+    // Save history first, THEN mark the job done, so the UI can always act on the saved clips.
+    const history = await ClipJob.create({
+      userEmail: email,
+      ytUrl: source.type === "youtube" ? source.url : "",
+      ytTitle: ec2Response.data.videoTitle || (source.type === "upload" ? "Uploaded video" : ""),
+      sourceType: source.type, captionSettings: settings, clips,
+    });
+    await clipJobs.finish(jobId, { status: "done", clips, historyId: String(history._id) });
+    webhooks.send(email, "clip.completed", {
+      jobId, historyId: String(history._id),
+      clips: clips.map(c => ({ title: c.title, url: c.url, duration: c.duration, score: c.score, hook: c.hook, description: c.description, hashtags: c.hashtags })),
+    });
+  } catch (err) {
+    console.error(`[clip-job] ${jobId} failed:`, err.response?.data || err.message || err);
+    await fail("Clip generation failed. Please try again.").catch(() => {});
+  } finally {
+    if (source.type === "upload") s3.deleteFromS3(source.key).catch(() => {});
+  }
+}
+
+app.post("/cut-clips", clipLimiter, requireAuth, async (req, res) => {
+  const { ytUrl, sourceKey, captionSettings } = req.body;
+  const user = await User.findOne({ email: req.authEmail });
+  if (!user) return res.status(401).json({ success: false, loginRequired: true, error: "Account not found. Please log in again." });
+  const source = sourceKey ? { type: "upload", key: String(sourceKey) } : { type: "youtube", url: ytUrl };
+  const r = await startClipJob({ user, source, captionSettings, via: "web" });
+  res.status(r.status).json(r.body);
 });
 
 app.get("/clip-history", requireAuth, async (req, res) => {
@@ -1196,7 +1338,8 @@ app.get("/clip-history", requireAuth, async (req, res) => {
         ytUrl: j.ytUrl,
         ytTitle: j.ytTitle,
         createdAt: j.createdAt,
-        clips: j.clips.filter(c => !c.deleted)
+        // idx = position in the stored job; the editor/scheduler address clips by it.
+        clips: j.clips.map((c, idx) => ({ ...c.toObject(), idx })).filter(c => !c.deleted)
       }))
       .filter(j => j.clips.length > 0);
 
@@ -1254,6 +1397,8 @@ async function runClipCleanupSweep() {
         if (clip.deleted) continue;
         const downloadExpired = clip.downloaded && clip.downloadedAt && clip.downloadedAt < fiveMinAgo;
         if (jobExpired || downloadExpired) keysToDelete.push(clip.s3Key);
+        // The caption-free master (used by the editor) goes away with the job, not per-download.
+        if (jobExpired && clip.sourceKey && !keysToDelete.includes(clip.sourceKey)) keysToDelete.push(clip.sourceKey);
       }
     }
 
@@ -1403,6 +1548,18 @@ app.post("/webhooks/razorpay", webhookLimiter, async (req, res) => {
     // Recurring subscription events are no longer used.
     // ReelScribe uses one-time Razorpay orders for both monthly and yearly plans.
 
+    if (event === "order.paid") {
+      const orderId = payload.order?.entity?.id;
+      const paymentId = payload.payment?.entity?.id || "";
+      if (orderId) {
+        const order = await razorpay.orders.fetch(orderId);
+        if (order?.status === "paid") {
+          const r = await fulfillPaidOrder(order, paymentId);
+          if (r.status >= 400) console.error("[/webhooks/razorpay] order.paid fulfilment problem:", orderId, r.body?.error);
+        }
+      }
+    }
+
     if (event === "payment.failed") {
       const paymentEntity = payload.payment?.entity;
       console.warn("[/webhooks/razorpay] payment.failed:", paymentEntity?.id, paymentEntity?.error_description || "reason unavailable");
@@ -1415,6 +1572,87 @@ app.post("/webhooks/razorpay", webhookLimiter, async (req, res) => {
   }
 });
 
+// Activates (or extends) a plan for a PAID Razorpay order. Idempotent: safe to call from both the
+// browser callback and the webhook, in any order, any number of times.
+async function fulfillPaidOrder(order, paymentId, expectedEmail = null) {
+  const orderId = order.id;
+  const plan    = order.notes?.plan;
+  const billing = order.notes?.billing;
+  const email   = order.notes?.email;
+
+  if (!isValidEmail(email))
+    return { status: 400, body: { success: false, error: "We could not verify who this order belongs to. Please contact support." } };
+  if (expectedEmail && email.toLowerCase() !== expectedEmail.toLowerCase())
+    return { status: 403, body: { success: false, error: "This payment belongs to a different account." } };
+
+  const alreadyPaid = await Payment.findOne({ razorpayOrderId: orderId }).lean();
+  if (alreadyPaid) {
+    // A retry after a transient database failure should still leave the user on the plan that was
+    // actually paid for, but must not extend it twice.
+    const existingUser = await User.findOne({ email }).select("plan planExpiresAt").lean();
+    if (existingUser && (!existingUser.planExpiresAt || new Date(existingUser.planExpiresAt) < new Date(alreadyPaid.createdAt))) {
+      const repairedExpiry = new Date(alreadyPaid.createdAt);
+      if (alreadyPaid.billingCycle === "yearly") repairedExpiry.setFullYear(repairedExpiry.getFullYear() + 1);
+      else repairedExpiry.setMonth(repairedExpiry.getMonth() + 1);
+      await User.updateOne({ email }, { $set: { plan: alreadyPaid.plan, lastPaidPlan: alreadyPaid.plan, billingCycle: alreadyPaid.billingCycle, planExpiresAt: repairedExpiry } });
+    }
+    return { status: 200, body: { success: true, alreadyProcessed: true, message: "Payment was already processed.", plan: alreadyPaid.plan } };
+  }
+
+  if (!["starter", "pro", "agency"].includes(plan))
+    return { status: 400, body: { success: false, error: "Invalid plan" } };
+
+  const isYearly = billing === "yearly";
+  const originalAmount = isYearly ? PLAN_PRICING[plan].y * 12 : PLAN_PRICING[plan].m;
+  const couponCode = String(order.notes?.couponCode || "").trim().toUpperCase();
+  const discountAmount = Math.max(0, Number(order.notes?.discountAmount || 0));
+  const finalAmount = Math.max(1, Number(order.notes?.finalAmount || originalAmount));
+
+  if (Math.round(Number(order.amount) / 100 * 100) !== Math.round(finalAmount * 100))
+    return { status: 400, body: { success: false, error: "Paid amount does not match this order." } };
+
+  const existingAccount = await User.findOne({ email }).select("plan planExpiresAt").lean();
+  if (!existingAccount) return { status: 404, body: { success: false, error: "User account not found. Please log in again." } };
+
+  // Renewing the SAME active plan extends from the current expiry instead of throwing away the days
+  // the customer already paid for.
+  const now = new Date();
+  const extending = existingAccount.plan === plan && existingAccount.planExpiresAt && new Date(existingAccount.planExpiresAt) > now;
+  const planExpiry = extending ? new Date(existingAccount.planExpiresAt) : new Date(now);
+  if (isYearly) planExpiry.setFullYear(planExpiry.getFullYear() + 1);
+  else planExpiry.setMonth(planExpiry.getMonth() + 1);
+
+  // Record the payment first. The unique order id makes this safe against duplicate callbacks/races.
+  try {
+    await Payment.create({
+      userEmail: email, plan, billingCycle: isYearly ? "yearly" : "monthly",
+      amount: finalAmount, originalAmount, discountAmount, couponCode: couponCode || null,
+      status: "paid", razorpayOrderId: orderId, razorpayPaymentId: paymentId,
+    });
+  } catch (paymentErr) {
+    if (paymentErr?.code === 11000) return { status: 200, body: { success: true, alreadyProcessed: true, message: "Payment was already processed.", plan } };
+    throw paymentErr;
+  }
+
+  const update = { plan, lastPaidPlan: plan, billingCycle: isYearly ? "yearly" : "monthly", planExpiresAt: planExpiry };
+  if (!extending) Object.assign(update, {
+    transcriptsUsedToday: 0, transcriptsUsedMonth: 0, clipsUsedToday: 0, clipsUsedMonth: 0,
+    lastTranscriptDate: null, lastTranscriptResetDate: null, lastClipDate: null,
+  });
+  const user = await User.findOneAndUpdate({ email }, update, { new: true });
+  if (!user) return { status: 404, body: { success: false, error: "User not found" } };
+
+  if (couponCode) {
+    const existingRedemption = await CouponRedemption.findOne({ orderId });
+    if (!existingRedemption) {
+      await CouponRedemption.create({ code: couponCode, email: email.toLowerCase(), plan, orderId, paymentId, discount: discountAmount, originalAmount, finalAmount });
+      await Coupon.updateOne({ code: couponCode }, { $inc: { usedCount: 1 }, $addToSet: { usedBy: email.toLowerCase() } });
+    }
+  }
+
+  return { status: 200, body: { success: true, message: `${plan.charAt(0).toUpperCase() + plan.slice(1)} plan activated successfully!`, plan, planExpiresAt: planExpiry } };
+}
+
 app.post("/verify-payment", requireAuth, async (req, res) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
@@ -1422,13 +1660,9 @@ app.post("/verify-payment", requireAuth, async (req, res) => {
     if (typeof razorpay_order_id !== "string" || typeof razorpay_payment_id !== "string" || typeof razorpay_signature !== "string")
       return res.status(400).json({ success: false, error: "We could not verify this payment. Please contact support." });
 
-    const expectedSig = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-      .update(razorpay_order_id + "|" + razorpay_payment_id)
-      .digest("hex");
+    const expectedSig = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET).update(razorpay_order_id + "|" + razorpay_payment_id).digest("hex");
     const expectedBuf = Buffer.from(expectedSig, "hex");
     const receivedBuf = Buffer.from(razorpay_signature, "hex");
-
     if (receivedBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(expectedBuf, receivedBuf))
       return res.status(400).json({ success: false, error: "Payment verification failed. Please contact support if the amount was deducted." });
 
@@ -1436,118 +1670,10 @@ app.post("/verify-payment", requireAuth, async (req, res) => {
     if (!order || order.status !== "paid")
       return res.status(400).json({ success: false, error: "This order has not been paid yet." });
 
-    const plan    = order.notes?.plan;
-    const billing = order.notes?.billing;
-    const email   = order.notes?.email;
-
-    if (!isValidEmail(email))
-      return res.status(400).json({ success: false, error: "We could not verify who this order belongs to. Please contact support." });
-    if (email.toLowerCase() !== req.authEmail.toLowerCase())
-      return res.status(403).json({ success: false, error: "This payment belongs to a different account." });
-
-    // Payment verification must be idempotent. A second callback for the same
-    // A Razorpay order should never extend the paid plan twice.
-    const alreadyPaid = await Payment.findOne({ razorpayOrderId: razorpay_order_id }).lean();
-    if (alreadyPaid) {
-      // A retry after a transient database failure should still leave the user
-      // on the plan that was actually paid for, but must not extend it twice.
-      const existingUser = await User.findOne({ email }).select("plan planExpiresAt").lean();
-      if (existingUser && (!existingUser.planExpiresAt || new Date(existingUser.planExpiresAt) < new Date(alreadyPaid.createdAt))) {
-        const repairedExpiry = new Date(alreadyPaid.createdAt);
-        if (alreadyPaid.billingCycle === "yearly") repairedExpiry.setFullYear(repairedExpiry.getFullYear() + 1);
-        else repairedExpiry.setMonth(repairedExpiry.getMonth() + 1);
-        await User.updateOne({ email }, { $set: { plan: alreadyPaid.plan, lastPaidPlan: alreadyPaid.plan, billingCycle: alreadyPaid.billingCycle, planExpiresAt: repairedExpiry } });
-      }
-      return res.json({ success: true, alreadyProcessed: true, message: "Payment was already processed.", plan: alreadyPaid.plan });
-    }
-
-    const validPlans = ["starter", "pro", "agency"];
-    if (!validPlans.includes(plan))
-      return res.status(400).json({ success: false, error: "Invalid plan" });
-
-    const isYearly = billing === "yearly";
-    const planExpiry = new Date();
-    if (isYearly) {
-      planExpiry.setFullYear(planExpiry.getFullYear() + 1);
-    } else {
-      planExpiry.setMonth(planExpiry.getMonth() + 1);
-    }
-    const originalAmount = isYearly ? PLAN_PRICING[plan].y * 12 : PLAN_PRICING[plan].m;
-    const couponCode = String(order.notes?.couponCode || "").trim().toUpperCase();
-    const discountAmount = Math.max(0, Number(order.notes?.discountAmount || 0));
-    const finalAmount = Math.max(1, Number(order.notes?.finalAmount || originalAmount));
-
-    if (Math.round(Number(order.amount) / 100 * 100) !== Math.round(finalAmount * 100))
-      return res.status(400).json({ success: false, error: "Paid amount does not match this order." });
-
-    const existingAccount = await User.findOne({ email }).select("_id").lean();
-    if (!existingAccount) return res.status(404).json({ success: false, error: "User account not found. Please log in again." });
-
-    // Record the payment first. The unique order id makes this operation safe
-    // against duplicate browser callbacks/races.
-    let paymentRecord;
-    try {
-      paymentRecord = await Payment.create({
-        userEmail: email,
-        plan,
-        billingCycle: isYearly ? "yearly" : "monthly",
-        amount: finalAmount,
-        originalAmount,
-        discountAmount,
-        couponCode: couponCode || null,
-        status: "paid",
-        razorpayOrderId: razorpay_order_id,
-        razorpayPaymentId: razorpay_payment_id,
-      });
-    } catch (paymentErr) {
-      if (paymentErr?.code === 11000) {
-        return res.json({ success: true, alreadyProcessed: true, message: "Payment was already processed.", plan });
-      }
-      throw paymentErr;
-    }
-
-    const user = await User.findOneAndUpdate(
-      { email },
-      {
-        plan,
-        lastPaidPlan:            plan,
-        billingCycle:            isYearly ? "yearly" : "monthly",
-        planExpiresAt:           planExpiry,
-        transcriptsUsedToday:    0,
-        transcriptsUsedMonth:    0,
-        clipsUsedToday:          0,
-        clipsUsedMonth:          0,
-        lastTranscriptDate:      null,
-        lastTranscriptResetDate: null,
-        lastClipDate:            null,
-      },
-      { new: true }
-    );
-
-    if (!user) return res.status(404).json({ success: false, error: "User not found" });
-
-    if (couponCode) {
-      const existingRedemption = await CouponRedemption.findOne({ orderId: razorpay_order_id });
-      if (!existingRedemption) {
-        await CouponRedemption.create({
-          code: couponCode,
-          email: email.toLowerCase(),
-          plan,
-          orderId: razorpay_order_id,
-          paymentId: razorpay_payment_id,
-          discount: discountAmount,
-          originalAmount,
-          finalAmount
-        });
-        await Coupon.updateOne(
-          { code: couponCode },
-          { $inc: { usedCount: 1 }, $addToSet: { usedBy: email.toLowerCase() } }
-        );
-      }
-    }
-
-    res.json({ success: true, message: `${plan.charAt(0).toUpperCase() + plan.slice(1)} plan activated successfully!`, plan, planExpiresAt: planExpiry });
+    const r = await fulfillPaidOrder(order, razorpay_payment_id, req.authEmail);
+    res.status(r.status).json(r.body);
   } catch (err) {
+    console.error("[/verify-payment] failed:", err);
     res.status(500).json({ success: false, error: "Something went wrong while verifying your payment. Please contact support." });
   }
 });
@@ -1589,7 +1715,8 @@ app.get("/user-plan", requireAuth, async (req, res) => {
 
 app.get("/history", requireAuth, async (req, res) => {
   try {
-    const reels = await Reel.find({ userEmail: req.authEmail }).sort({ createdAt: -1 });
+    const reels = await Reel.find({ userEmail: req.authEmail }).select("-aiCache").sort({ createdAt: -1 }).limit(100).lean();
+    reels.forEach(r => { r.hasSegments = Array.isArray(r.segments) && r.segments.length > 0; delete r.segments; });
     res.json({ success: true, data: reels });
   } catch (error) { console.error("[/history] failed:", error); res.status(500).json({ success: false, error: "Couldn't load your history right now. Please try again." }); }
 });
@@ -1609,7 +1736,7 @@ app.post("/admin/login", (req, res) => {
     return res.status(429).json({ success: false, error: `Too many incorrect attempts. Please try again in ${waitMin} minute${waitMin === 1 ? "" : "s"}.` });
   }
 
-  if (!process.env.ADMIN_SECRET || req.body?.key !== process.env.ADMIN_SECRET) {
+  if (!process.env.ADMIN_SECRET || !safeEqual(req.body?.key, process.env.ADMIN_SECRET)) {
     if (!rec || now - rec.windowStart > ADMIN_WINDOW_MS) {
       adminAuthAttempts[ip] = { count: 1, windowStart: now, blockedUntil: null };
     } else {
@@ -2100,11 +2227,75 @@ app.post("/admin/marketing/send", adminAuth, async (req,res)=>{
   } catch(e){ console.error("[/admin/marketing/send] failed:", e); res.status(500).json({success:false,error:"Couldn't send the campaign right now."}); }
 });
 
+// ── Feature modules ────────────────────────────────────────
+const featureCtx = {
+  app, express, rateLimit, requireAuth, User, Reel, ClipJob, JobState, BrandKit, Team, WebhookEndpoint,
+  ai, webhooks, resend, axios, s3, crypto, mongoose, multer,
+  getEffectivePlan, PLAN_LIMITS, isValidEmail, isValidYouTubeUrl, uploadPrefix, resolveBrandKit,
+  startClipJob, runUserUrlTranscription, HttpError, EC2_URL, INTERNAL_KEY, getSessionEmail, mapClip,
+  sanitizeCaptionSettings,
+  PUBLIC_URL: () => (process.env.PUBLIC_SITE_URL || "https://reelscribe.site").replace(/\/$/, ""),
+};
+require("./routes/ai")(featureCtx);
+require("./routes/clipTools")(featureCtx);
+require("./routes/studio")(featureCtx);
+require("./routes/developer")(featureCtx);
+require("./routes/scheduler")(featureCtx);
+
 // Consistent upload errors (especially the 25 MB direct-upload limit and file-type rejection).
 app.use((err, req, res, next) => {
   if (err?.code === "LIMIT_FILE_SIZE") return res.status(413).json({ success: false, error: "File is too large. Direct uploads are limited to 25 MB." });
   if (err?.message === "UNSUPPORTED_FILE_TYPE") return res.status(415).json({ success: false, error: "Unsupported file type. Please upload a video file (mp4, mov, webm, mkv, avi, 3gp)." });
   next(err);
+});
+
+
+// ── ReelScribe Mascot AI support ──────────────────────────────────────────
+// Uses the existing Groq client. Keep GROQ_API_KEY server-side only.
+const mascotChatRate = new Map();
+app.post("/api/mascot/chat", async (req, res) => {
+  const now = Date.now();
+  const key = String(req.sessionID || req.ip || "guest");
+  const hit = mascotChatRate.get(key) || { start: now, count: 0 };
+  if (now - hit.start > 60_000) { hit.start = now; hit.count = 0; }
+  hit.count += 1;
+  mascotChatRate.set(key, hit);
+  if (hit.count > 20) return res.status(429).json({ success: false, error: "Too many messages. Please wait a minute and try again." });
+
+  if (!process.env.GROQ_API_KEY) {
+    return res.status(503).json({ success: false, error: "AI support is not configured yet. Please contact support." });
+  }
+  const incoming = Array.isArray(req.body?.messages) ? req.body.messages.slice(-8) : [];
+  const messages = incoming
+    .filter(m => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
+    .map(m => ({ role: m.role, content: m.content.replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 1200).trim() }))
+    .filter(m => m.content);
+  if (!messages.length || messages[messages.length - 1].role !== "user") {
+    return res.status(400).json({ success: false, error: "Please enter a message first." });
+  }
+
+  const page = req.body?.page && typeof req.body.page === "object" ? req.body.page : {};
+  const pagePath = String(page.path || "").replace(/[^a-zA-Z0-9_./?=&-]/g, "").slice(0, 120);
+  const pageTitle = String(page.title || "").replace(/[<>]/g, "").slice(0, 100);
+  const pageError = String(page.error || "").replace(/[<>]/g, "").slice(0, 350);
+
+  const system = `You are ReelScribe Assistant, the friendly support assistant for ReelScribe, a website for video transcription and AI clip creation. Reply naturally and concisely in the user's language (Hindi/Hinglish or English). Explain workflows step-by-step. Do not claim you can inspect account data, process a video, change a plan, make payments, or perform actions unless a verified tool explicitly allows it. Never ask for passwords, OTPs, API keys, or payment details. If a user reports an issue, ask for the exact visible error if context is insufficient. General product guidance: users can paste a supported video URL into the relevant Transcript or Cut Clips tool, start processing, then view results in the dashboard/history. Plan limits and features may change; tell users to check the Pricing page for current limits. If you don't know an answer, say so honestly and direct them to the Contact page. Current page: ${pageTitle || "unknown"} (${pagePath || "unknown"}). Visible error context: ${pageError || "none"}.`;
+  try {
+    const completion = await groq.chat.completions.create({
+      model: process.env.GROQ_CHAT_MODEL || "openai/gpt-oss-20b",
+      messages: [{ role: "system", content: system }, ...messages],
+      temperature: 0.4,
+      max_tokens: 500
+    });
+    const reply = completion.choices?.[0]?.message?.content?.trim();
+    if (!reply) throw new Error("Empty assistant response");
+    return res.json({ success: true, reply });
+  } catch (err) {
+    console.error("[mascot-chat]", err?.status || "", err?.code || "", err?.message || err);
+    if (err?.status === 429) return res.status(429).json({ success: false, error: "AI support is busy right now. Please try again shortly." });
+    if (err?.code === "model_not_found" || err?.status === 404) return res.status(502).json({ success: false, error: "The configured AI model is unavailable. Please check GROQ_CHAT_MODEL in hosting settings." });
+    return res.status(502).json({ success: false, error: "I couldn't reach AI support right now. Please try again, or visit Contact for help." });
+  }
 });
 
 app.get("/health", (req, res) => {
