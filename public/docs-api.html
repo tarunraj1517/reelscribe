@@ -1,0 +1,27 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>API documentation — ReelScribe</title><meta name="description" content="ReelScribe public API: transcripts, clips and webhooks."><link rel="icon" href="/assets/favicon.png"><link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="/assets/css/site.css"><link rel="stylesheet" href="/assets/css/tools.css"></head><body>
+<header class="wrap nav"><a class="logo" href="/">ReelScribe<b>.</b></a><nav><a href="/studio.html#api">Get an API key</a></nav></header>
+<main class="wrap article" style="padding-bottom:72px"><p class="m">API v1 · Agency plan</p><h1 style="font-size:clamp(34px,6vw,56px)">API documentation</h1>
+<p>Create a key in <a href="/studio.html#api" style="color:var(--acc)">Studio → API &amp; webhooks</a> and send it as a bearer token. Limit: 30 requests/minute per key. Usage counts against your plan's normal transcript and clip limits.</p>
+<span class="code">Authorization: Bearer rs_live_xxxxxxxxxxxxxxxx</span>
+<h2>GET /api/v1/account</h2><p>Your plan and limits.</p>
+<h2>POST /api/v1/transcripts</h2><span class="code">{ "url": "https://www.youtube.com/watch?v=VIDEO_ID" }   // YouTube or Instagram
+
+→ 201 { "success": true, "id": "…", "source": "youtube-captions", "language": "en",
+        "words": 1234, "transcript": "…", "segments": [{ "start": 0, "end": 2.4, "text": "…" }] }</span>
+<h2>GET /api/v1/transcripts/:id?format=json|srt|vtt|txt</h2><p>Fetch a saved transcript, or download subtitles.</p>
+<h2>POST /api/v1/clips</h2><span class="code">{ "url": "https://www.youtube.com/watch?v=VIDEO_ID",
+  "captionSettings": { "style": "Kinetic Mix", "aspectRatio": "9:16" } }
+
+→ 202 { "success": true, "jobId": "…", "statusUrl": "https://reelscribe.site/api/v1/clips/…" }</span>
+<h2>GET /api/v1/clips/:jobId</h2><p>Poll until <span class="mono">status</span> is <span class="mono">done</span> (typically 2–5 min). Jobs are kept 2 hours; clip files for 24 hours.</p>
+<span class="code">{ "status": "done", "clips": [{ "title": "…", "url": "https://…mp4", "duration": 34, "score": 82,
+  "hook": "…", "description": "…", "hashtags": ["…"] }] }</span>
+<h2>Webhooks</h2><p>Instead of polling, set a webhook URL (https only) in Studio. Events: <span class="mono">clip.completed</span>, <span class="mono">clip.failed</span>, <span class="mono">transcript.completed</span>. Each delivery is a JSON POST with these headers:</p>
+<span class="code">X-ReelScribe-Event: clip.completed
+X-ReelScribe-Timestamp: 1760000000
+X-ReelScribe-Signature: sha256=&lt;hex&gt;</span>
+<p>Verify it by computing <span class="mono">HMAC-SHA256(secret, timestamp + "." + rawBody)</span> and comparing it to the signature. Reject timestamps older than 5 minutes. Respond with any 2xx; failed deliveries are retried 3 times.</p>
+<span class="code">const sig = crypto.createHmac("sha256", SECRET).update(`${ts}.${rawBody}`).digest("hex");
+const ok = crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(header.replace("sha256=", "")));</span>
+<h2>Errors</h2><p>Every error is <span class="mono">{ "success": false, "error": "message" }</span> with a matching HTTP status (401 bad key, 403 plan/limit, 429 rate limit).</p>
+</main></body></html>
