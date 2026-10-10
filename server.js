@@ -66,7 +66,7 @@ app.use((req, res, next) => {
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
   res.setHeader("X-XSS-Protection", "0"); // deprecated in modern browsers; CSP below is the real defense
-  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(self)");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(self), geolocation=(), payment=(self)");
   res.setHeader(
     "Content-Security-Policy",
     [
@@ -178,6 +178,54 @@ app.use(passport.session());
 function getSessionEmail(req) {
   return (req.user && req.user.email) || req.session?.userEmail || null;
 }
+
+// ── ReelScribe mascot AI assistant ────────────────────────────────────────
+// Session-aware but available to guests. Never expose API keys or private account
+// data to the browser; the client only receives a short assistant reply.
+const mascotChatHits = new Map();
+app.post("/api/mascot/chat", async (req, res) => {
+  try {
+    const now = Date.now();
+    const key = String(req.sessionID || req.ip || "guest");
+    const hit = mascotChatHits.get(key) || { start: now, count: 0 };
+    if (now - hit.start > 60 * 1000) { hit.start = now; hit.count = 0; }
+    hit.count += 1; mascotChatHits.set(key, hit);
+    if (hit.count > 12) return res.status(429).json({ success: false, error: "You're sending messages a little quickly. Please wait a minute and try again." });
+
+    const messages = Array.isArray(req.body?.messages) ? req.body.messages.slice(-8) : [];
+    const clean = messages.map(m => ({
+      role: m && m.role === "assistant" ? "assistant" : "user",
+      content: String(m && m.content || "").replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 1200)
+    })).filter(m => m.content.trim());
+    if (!clean.length || clean[clean.length - 1].role !== "user") return res.status(400).json({ success: false, error: "Please type a question first." });
+    if (!process.env.GROQ_API_KEY) return res.status(503).json({ success: false, error: "AI support is not configured yet. Please try again later or use the Contact page." });
+
+    let accountContext = "The visitor may be logged out; do not assume their plan or account status.";
+    const email = getSessionEmail(req);
+    if (email) {
+      const user = await User.findOne({ email }).select("plan credits planExpiresAt isSuspended").lean().catch(() => null);
+      if (user) accountContext = "Signed-in account context: plan=" + String(user.plan || "free") + "; credits=" + Number(user.credits || 0) + "; suspended=" + Boolean(user.isSuspended) + ". Do not reveal email, internal IDs, or private fields. Do not claim live usage counts unless provided.";
+    }
+    const pagePath = String(req.body?.page?.path || "").replace(/[^a-zA-Z0-9_./-]/g, "").slice(0, 100);
+    const pageTitle = String(req.body?.page?.title || "").replace(/[<>\u0000-\u001f]/g, " ").slice(0, 100);
+    const pageError = String(req.body?.page?.visibleError || "").replace(/[<>\u0000-\u001f]/g, " ").slice(0, 300);
+    const pageContext = pagePath ? `Current page context: ${pagePath}${pageTitle ? " (" + pageTitle + ")" : ""}. ${pageError ? "Visible error/status text: " + pageError + "." : ""} Use this only to tailor guidance; do not assume form contents or page data.` : "";
+    const system = `You are ReelScribe's friendly product support mascot. Reply naturally in the user's language (Hindi/Hinglish/English), concise and practical. Help with YouTube/Instagram video transcripts, AI clip generation, captions, downloads, plans, login, and troubleshooting. Be honest: never claim to have run an action, checked a job, or accessed live usage unless the request data explicitly provides it. Do not invent features, prices, status, or account usage. If a problem needs account-specific investigation, ask for the visible error message and direct the user to /contact.html. Never ask for passwords, OTPs, API keys, payment details, or other secrets. For actions, suggest safe navigation only; never claim to change subscriptions, payments, or account settings. Product facts: ReelScribe supports YouTube and Instagram links plus direct video uploads for transcripts; clip generation availability depends on plan. Current configured plan limits: Free transcript 2/day and 5/month, clips 0; Starter transcript 5/day and 30/month, clips 2/day and 10/month; Pro transcript 10/day and 60/month, clips 5/day and 15/month; Agency transcript 20/day and 150/month, clips 15/day and 60/month. Video limits: Starter 500 MB/40 min, Pro 1024 MB/70 min, Agency 2048 MB/120 min. Treat this as product guidance, not live usage. If unsure, say so. ${accountContext} ${pageContext}`;
+    const completion = await groq.chat.completions.create({
+      model: process.env.GROQ_CHAT_MODEL || "llama-3.3-70b-versatile",
+      messages: [{ role: "system", content: system }, ...clean],
+      temperature: 0.45,
+      max_tokens: 450
+    });
+    const reply = completion.choices?.[0]?.message?.content?.trim();
+    if (!reply) throw new Error("Empty assistant response");
+    res.json({ success: true, reply });
+  } catch (err) {
+    if (err?.status === 429) return res.status(429).json({ success: false, error: "AI support is busy right now. Please try again in a moment." });
+    console.error("[mascot-chat]", err?.message || err);
+    res.status(502).json({ success: false, error: "I couldn't reach AI support right now. Please try again, or visit Contact for help." });
+  }
+});
 
 async function requireAuth(req, res, next) {
   const email = getSessionEmail(req);
