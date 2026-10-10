@@ -1,3 +1,7 @@
+function escapeHtml(str){
+  return String(str ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
 // Identity comes from the server session — this page no longer accepts
 // an arbitrary email to look up, which used to let anyone view anyone
 // else's transcript history just by typing in their address.
@@ -44,10 +48,10 @@ async function loadHistory() {
       div.className = "history-item";
       div.innerHTML = `
         <div class="history-item-top">
-          <div class="history-item-date">${date}</div>
-          <div class="history-item-source">${source}</div>
+          <div class="history-item-date">${escapeHtml(date)}</div>
+          <div class="history-item-source">${escapeHtml(source)}</div>
         </div>
-        <div class="history-item-url">${item.reelUrl || ""}</div>
+        <div class="history-item-url">${escapeHtml(item.reelUrl || "")}</div>
         <div class="history-item-transcript"></div>
         <div class="history-item-toggle">Show more</div>
       `;

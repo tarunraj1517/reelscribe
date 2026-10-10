@@ -151,6 +151,7 @@ function handleResult(data){
     document.getElementById("loginSection").style.display = "block";
   } else if(data.success){
     localStorage.setItem("latestTranscript", data.transcript);
+    localStorage.setItem("isPreview", data.isPreview ? "true" : "false");
     if(data.isGuest){
       const words = data.transcript.split(" ");
       previewText.innerText = words.slice(0,60).join(" ") + (words.length>60?"...":"");

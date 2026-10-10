@@ -218,10 +218,12 @@ async function loadClipHistory(){
             <div class="log-sub-item">
               <span>${escapeHtml(clip.title || 'Clip ' + (i+1))} · ${escapeHtml(String(clip.duration))}s</span>
               <a href="${escapeHtml(clip.url)}" download="clip_${i+1}.mp4" data-s3key="${escapeHtml(clip.s3Key || '')}">Download</a>
+              ${window.rsClipExtras ? window.rsClipExtras(clip, job._id, clip.idx ?? i, true) : ''}
             </div>
           `).join('')}
         </div>`;
-      item.addEventListener('click', () => {
+      item.addEventListener('click', (ev) => {
+        if (ev.target.closest('.frame-actions, a')) return;
         const sub = document.getElementById(`historyClips${jobIdx}`);
         sub.style.display = sub.style.display === 'block' ? 'none' : 'block';
       });
@@ -660,7 +662,8 @@ function stopProcAnimation(finish){
 
 async function generateClips(){
   const url = document.getElementById("clipUrl").value.trim();
-  if (!url) { alert("Please paste a YouTube URL!"); return; }
+  const uploadedKey = window.rsUpload && window.rsUpload.key;
+  if (!url && !uploadedKey) { alert("Paste a YouTube URL or upload a video first!"); return; }
   // Free plan can proceed ONLY if they still have an unused referral
   // credit — this is what lets a referral reward be used without
   // requiring an upgrade. Once the credit is spent, this falls back
@@ -709,7 +712,7 @@ async function generateClips(){
     loadUserPlan();
   }
 
-  function showClips(clips){
+  function showClips(clips, historyId){
     stopProcAnimation(true);
     lastGeneratedClips = clips || [];
     setTimeout(() => {
@@ -738,6 +741,7 @@ async function generateClips(){
             <div class="frame-body">
               <div class="frame-title">${escapeHtml(clip.title || 'Clip ' + (i+1))}</div>
               ${clip.reason ? `<div class="frame-reason">${escapeHtml(clip.reason)}</div>` : ''}
+              ${window.rsClipExtras ? window.rsClipExtras(clip, historyId, i, false) : ''}
               <a href="${escapeHtml(clip.url)}" download="clip_${i+1}.mp4" class="frame-dl" data-s3key="${escapeHtml(clip.s3Key || '')}">Download</a>
             </div>
           </div>`).join('');
@@ -762,7 +766,7 @@ async function generateClips(){
     const res = await fetch("/cut-clips", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ytUrl: url, captionSettings: cpGetSettings() })
+      body: JSON.stringify(uploadedKey && !url ? { sourceKey: uploadedKey, captionSettings: cpGetSettings() } : { ytUrl: url, captionSettings: cpGetSettings() })
     });
     const data = await res.json();
 
@@ -770,6 +774,7 @@ async function generateClips(){
     if (!data.success || !data.jobId) { showError(data.error); return; }
 
     const jobId = data.jobId;
+    if (window.rsClearUpload) window.rsClearUpload();
     const startTime = Date.now();
     const maxWaitMs = 30 * 60 * 1000;
 
@@ -779,7 +784,7 @@ async function generateClips(){
         const statusRes = await fetch(`/clip-status/${jobId}`);
         const statusData = await statusRes.json();
         if (!statusData.success) { clearInterval(poll); showError(statusData.error); return; }
-        if (statusData.status === "done") { clearInterval(poll); showClips(statusData.clips || []); }
+        if (statusData.status === "done") { clearInterval(poll); showClips(statusData.clips || [], statusData.historyId); }
         else if (statusData.status === "error") { clearInterval(poll); showError(statusData.error); }
       } catch (e) { /* transient — retry next tick */ }
     }, 4000);

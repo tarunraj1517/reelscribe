@@ -49,8 +49,7 @@
     '@keyframes rsm-cheerL{0%{transform:rotate(105deg)}100%{transform:rotate(135deg)}}' +
     '@keyframes rsm-sway{0%{transform:rotate(-6deg)}100%{transform:rotate(8deg)}}' +
     '@keyframes rsm-fall{0%{transform:translateY(-8px);opacity:1}100%{transform:translateY(28px);opacity:0}}' +
-    '@media (prefers-reduced-motion:reduce){.rsm-m,.rsm-an,.rsm-ra,.rsm-la,.rsm-conf *{animation:none!important}#rsm-bub{transition:none}}' +
-    '#rsm-chat{display:none;position:fixed;right:14px;bottom:132px;width:min(370px,calc(100vw - 24px));height:min(520px,calc(100dvh - 170px));z-index:10001;background:#fff;color:#18243a;border:1px solid #dbe5f2;border-radius:20px;box-shadow:0 18px 60px rgba(15,35,70,.22);overflow:hidden;pointer-events:auto;font:14px/1.45 Instrument Sans,system-ui,sans-serif;flex-direction:column}#rsm-chat.open{display:flex}#rsm-chat-head{padding:14px 16px;background:linear-gradient(120deg,#eff7ff,#f4f1ff);display:flex;align-items:center;gap:10px;border-bottom:1px solid #e3eaf4}#rsm-chat-avatar{width:36px;height:36px;border-radius:12px;background:#6fd62a;display:grid;place-items:center;font-size:21px}#rsm-chat-head strong{display:block;font-size:14px}#rsm-chat-head small{color:#64748b}#rsm-chat-head button{border:0;background:#fff;border-radius:9px;min-width:30px;height:30px;font-size:15px;cursor:pointer;color:#334155}#rsm-chat-log{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth}.rsm-msg{max-width:88%;padding:10px 12px;border-radius:14px;white-space:pre-wrap;overflow-wrap:anywhere}.rsm-msg.bot{align-self:flex-start;background:#f1f5f9;border-bottom-left-radius:5px}.rsm-msg.user{align-self:flex-end;background:#2864e8;color:white;border-bottom-right-radius:5px}.rsm-msg.error{background:#fff1f2;color:#9f1239}.rsm-typing{color:#64748b;font-size:12px;padding:0 14px 8px}#rsm-quick{display:flex;gap:6px;overflow-x:auto;padding:0 12px 10px}#rsm-quick button{white-space:nowrap;border:1px solid #dbe5f2;background:#fff;color:#31517c;border-radius:999px;padding:7px 10px;font-size:11px;cursor:pointer}#rsm-chat-form{border-top:1px solid #e5eaf2;padding:10px;display:flex;gap:7px;align-items:flex-end}#rsm-chat-input{resize:none;min-height:40px;max-height:100px;flex:1;min-width:0;border:1px solid #d5deeb;border-radius:12px;padding:10px;font:inherit;outline:none}#rsm-chat-input:focus{border-color:#4f7fe8;box-shadow:0 0 0 3px #dce8ff}#rsm-chat-form button{border:0;border-radius:11px;min-width:38px;height:40px;background:#2864e8;color:white;font-size:16px;cursor:pointer}#rsm-chat-form button.secondary{background:#eef2f8;color:#334155}#rsm-chat-form button:disabled{opacity:.5;cursor:wait}#rsm-chat-foot{font-size:10px;color:#8792a5;text-align:center;padding:0 10px 8px}#rsm-chat #rsm-chat-clear{background:transparent;color:#64748b;font-size:11px;width:auto;padding:0 6px}#rsm-wrap.chat-open #rsm-bub{display:none}#rsm-wrap.chat-open{z-index:10002}@media(max-width:480px){#rsm-chat{right:8px;bottom:92px;width:calc(100vw - 16px);height:min(68dvh,560px);border-radius:18px}#rsm-wrap.chat-open{right:8px;bottom:8px}#rsm-wrap.chat-open #rsm-box{width:64px}}';
+    '@media (prefers-reduced-motion:reduce){.rsm-m,.rsm-an,.rsm-ra,.rsm-la,.rsm-conf *{animation:none!important}#rsm-bub{transition:none}}';
 
   var SVG = '<svg id="rsm" viewBox="10 95 200 180" aria-hidden="true" focusable="false">' +
     '<ellipse cx="110" cy="262" rx="36" ry="5" fill="#1B2412" opacity=".12"/>' +
@@ -134,8 +133,7 @@
   }
   function setBusy(n, text) { if (!wrap) return; busy = { name: n, text: text }; clearTimeout(backT); play(n); bubble(text, 0); }
   function clearBusy() { busy = null; }
-  function hide() {
-    setChatOpen(false); try { localStorage.setItem('rsmOff', '1'); } catch (e) {} if (wrap) { wrap.remove(); wrap = null; } showChip(); }
+  function hide() { try { localStorage.setItem('rsmOff', '1'); } catch (e) {} if (wrap) { wrap.remove(); wrap = null; } showChip(); }
 
   var BTN = '.btn,.cta,.cta-outline,button[type="submit"],.frame-dl,#genBtn';
   var YT = /^(https?:\/\/)?(www\.|m\.)?(youtube\.com\/(watch\?v=|shorts\/|live\/)|youtu\.be\/)[\w-]{6,}/i;
@@ -380,17 +378,6 @@
     if (b) { b.classList.toggle('on', alertsOn); b.setAttribute('aria-pressed', alertsOn ? 'true' : 'false'); }
   }
 
-  var chatMessages = [], chatBusy = false, recognition = null;
-  var CHAT_KEY = 'rsmChatHistoryV1';
-  function safeChatHistory() { try { var v=JSON.parse(localStorage.getItem(CHAT_KEY)||'[]'); return Array.isArray(v)?v.filter(function(m){return m&&(m.role==='user'||m.role==='assistant')&&typeof m.content==='string';}).slice(-12):[]; } catch(e){return [];} }
-  function saveChatHistory(){try{localStorage.setItem(CHAT_KEY,JSON.stringify(chatMessages.slice(-12)));}catch(e){}}
-  function appendChat(role,content,isError){var log=document.getElementById('rsm-chat-log');if(!log)return;var el=document.createElement('div');el.className='rsm-msg '+(role==='user'?'user':'bot')+(isError?' error':'');var body=document.createElement('span');body.textContent=content;el.appendChild(body);if(role!=='user'&&!isError&&window.speechSynthesis&&window.SpeechSynthesisUtterance){var speak=document.createElement('button');speak.type='button';speak.textContent=' 🔊';speak.title='Read aloud';speak.setAttribute('aria-label','Read answer aloud');speak.style.cssText='border:0;background:transparent;cursor:pointer;padding:2px;color:#31517c';speak.addEventListener('click',function(){try{window.speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(content);u.lang=/[अ-ह]/.test(content)?'hi-IN':'en-IN';window.speechSynthesis.speak(u);}catch(e){}});el.appendChild(speak);}log.appendChild(el);log.scrollTop=log.scrollHeight;}
-  function drawChat(){var log=document.getElementById('rsm-chat-log');if(!log)return;log.textContent='';if(!chatMessages.length)appendChat('assistant','Hi! 👋 Main ReelScribe ka AI helper hoon. Clips, transcripts, plans ya kisi error mein help chahiye?');chatMessages.slice(-12).forEach(function(m){appendChat(m.role,m.content);});}
-  function setChatOpen(open){var panel=document.getElementById('rsm-chat');if(!panel||!wrap)return;panel.classList.toggle('open',!!open);wrap.classList.toggle('chat-open',!!open);panel.setAttribute('aria-hidden',open?'false':'true');if(open){drawChat();var input=document.getElementById('rsm-chat-input');if(input)setTimeout(function(){input.focus();},50);play('listening');}}
-  function addTyping(on){var t=document.getElementById('rsm-chat-typing');if(t)t.hidden=!on;}
-  function sendChat(text){text=String(text||'').trim();if(!text||chatBusy)return;chatMessages.push({role:'user',content:text.slice(0,1200)});chatMessages=chatMessages.slice(-12);saveChatHistory();appendChat('user',text.slice(0,1200));var input=document.getElementById('rsm-chat-input'),send=document.getElementById('rsm-chat-send');if(input)input.value='';chatBusy=true;if(send)send.disabled=true;addTyping(true);play('thinking');fetch('/api/mascot/chat',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:chatMessages.slice(-8),page:{path:location.pathname,title:document.title,visibleError:(function(){var el=document.querySelector('[role=alert],.error-message,.error-text,#procSub,#procStatus,.toast');return el&&el.offsetParent!==null?String(el.innerText||el.textContent||'').trim().slice(0,300):'';})()}})}).then(function(r){return r.json().then(function(d){if(!r.ok||!d.success)throw new Error(d.error||'Could not get a reply.');return d;});}).then(function(d){chatMessages.push({role:'assistant',content:String(d.reply||'').slice(0,3500)});chatMessages=chatMessages.slice(-12);saveChatHistory();appendChat('assistant',chatMessages[chatMessages.length-1].content);play('happy');}).catch(function(e){appendChat('assistant',(e.message||'AI support is unavailable right now.')+' You can also visit the Contact page.',true);play('confused');}).finally(function(){chatBusy=false;if(send)send.disabled=false;addTyping(false);if(input)input.focus();});}
-  function addChatUI(){var panel=document.createElement('section');panel.id='rsm-chat';panel.setAttribute('role','dialog');panel.setAttribute('aria-label','ReelScribe AI assistant');panel.setAttribute('aria-hidden','true');panel.innerHTML='<div id="rsm-chat-head"><div id="rsm-chat-avatar" aria-hidden="true">✦</div><div style="flex:1"><strong>ReelScribe Assistant</strong><small>AI help · Hinglish & English</small></div><button type="button" id="rsm-chat-clear" title="Clear chat">Clear</button><button type="button" id="rsm-chat-close" aria-label="Close chat">×</button></div><div id="rsm-chat-log" aria-live="polite"></div><div id="rsm-chat-typing" class="rsm-typing" hidden>Thinking…</div><div id="rsm-quick"><button type="button" data-q="How do I create clips?">Create clips</button><button type="button" data-q="How do I generate a transcript?">Transcript help</button><button type="button" data-q="Explain the ReelScribe plans and limits.">Plans & limits</button><button type="button" data-q="Help me troubleshoot an error.">Fix an error</button><button type="button" data-go="/clips-dashboard.html">Open clips</button><button type="button" data-go="/transcript.html">Transcript page</button><button type="button" data-go="/pricing.html">Pricing</button><button type="button" data-go="/contact.html">Contact</button></div><form id="rsm-chat-form"><textarea id="rsm-chat-input" rows="1" maxlength="1200" placeholder="Ask me anything…" aria-label="Message the assistant"></textarea><button class="secondary" type="button" id="rsm-chat-mic" aria-label="Use voice input" title="Voice input">🎙</button><button type="submit" id="rsm-chat-send" aria-label="Send message">➤</button></form><div id="rsm-chat-foot">AI can make mistakes. Never share passwords or OTPs.</div>';document.body.appendChild(panel);chatMessages=safeChatHistory();drawChat();document.getElementById('rsm-chat-close').addEventListener('click',function(){setChatOpen(false);});document.getElementById('rsm-chat-clear').addEventListener('click',function(){chatMessages=[];saveChatHistory();drawChat();});document.getElementById('rsm-chat-form').addEventListener('submit',function(e){e.preventDefault();sendChat(document.getElementById('rsm-chat-input').value);});document.getElementById('rsm-chat-input').addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat(this.value);}});panel.querySelectorAll('[data-q]').forEach(function(b){b.addEventListener('click',function(){sendChat(b.getAttribute('data-q'));});});panel.querySelectorAll('[data-go]').forEach(function(b){b.addEventListener('click',function(){var dest=b.getAttribute('data-go');if(['/clips-dashboard.html','/transcript.html','/pricing.html','/contact.html','/dashboard.html','/history.html'].indexOf(dest)>=0)location.href=dest;});});document.getElementById('rsm-chat-mic').addEventListener('click',function(){var SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){appendChat('assistant','Voice input is not supported in this browser. You can type your question instead.',true);return;}if(recognition){try{recognition.stop();}catch(e){}recognition=null;return;}recognition=new SR();recognition.lang=/hi|in/i.test(navigator.language||'')?'hi-IN':'en-IN';recognition.interimResults=false;recognition.maxAlternatives=1;var mic=this;mic.textContent='⏺';recognition.onresult=function(e){var t=e.results&&e.results[0]&&e.results[0][0]&&e.results[0][0].transcript;if(t)document.getElementById('rsm-chat-input').value=t;};recognition.onerror=function(){appendChat('assistant','Mic access nahi mil paya. Browser permission check karo ya type karke poochho.',true);};recognition.onend=function(){mic.textContent='🎙';recognition=null;};try{recognition.start();}catch(e){mic.textContent='🎙';recognition=null;}});}
-
   function build() {
     ensureCss();
     wrap = document.createElement('div'); wrap.id = 'rsm-wrap';
@@ -398,7 +385,6 @@
       '<button id="rsm-s" type="button" aria-pressed="false" aria-label="Sound and notifications" title="Sound and notifications">' + BELL + '</button>' +
       '<button id="rsm-x" type="button" aria-label="Hide mascot" title="Hide mascot">\u00d7</button></div>';
     document.body.appendChild(wrap);
-    addChatUI();
     box = wrap.querySelector('#rsm-box'); bub = wrap.querySelector('#rsm-bub'); svg = wrap.querySelector('#rsm');
     roll = svg.querySelector('#rsm-roll'); face = svg.querySelector('#rsm-face'); eyes = svg.querySelector('#rsm-eyes'); mo = svg.querySelector('#rsm-mo');
     eL = svg.querySelector('#rsm-eL'); eR = svg.querySelector('#rsm-eR'); rL = eL.firstChild; rR = eR.firstChild;
@@ -406,7 +392,7 @@
     wrap.querySelector('#rsm-x').addEventListener('click', function (e) { e.stopPropagation(); hide(); });
     wrap.querySelector('#rsm-s').addEventListener('click', toggleAlerts);
     var clicks = [['laughing', 'Hehe, that tickles!'], ['playful', 'Drag me anywhere you like!'], ['happy', "Hi! I'm here if you need me."]], ci = 0;
-    box.addEventListener('click', function () { if (dragged) return; setChatOpen(!document.getElementById('rsm-chat').classList.contains('open')); });
+    box.addEventListener('click', function () { if (dragged) return; var c = clicks[ci++ % clicks.length]; say(c[0], c[1], 3000); });
     setupDrag(); syncBell(); play('waking');
   }
 
@@ -450,5 +436,144 @@
   }
 
   window.ReelMascot = { say: say, setBusy: setBusy, clearBusy: clearBusy, play: function (n) { if (wrap) play(n); }, hide: hide };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+})();
+
+/* ReelScribe AI Companion — additive widget; keeps the existing mascot intact. */
+(function () {
+  'use strict';
+  if (window.__ReelScribeAICompanionLoaded) return;
+  window.__ReelScribeAICompanionLoaded = true;
+  var STORAGE = 'reelscribe_ai_chat_v1';
+  var history = [];
+  try { history = JSON.parse(localStorage.getItem(STORAGE) || '[]'); if (!Array.isArray(history)) history = []; } catch (_) { history = []; }
+  history = history.filter(function (m) { return m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string'; }).slice(-12);
+  var busy = false, recognition = null, panel, list, input, sendBtn, status;
+
+  var css = `
+  #rs-ai-launch{position:fixed;right:18px;bottom:104px;z-index:99990;border:0;border-radius:999px;padding:11px 15px;background:linear-gradient(135deg,#1463e9,#7047e8);color:#fff;font:600 13px system-ui;box-shadow:0 8px 24px #163a7633;cursor:pointer}
+  #rs-ai-panel{position:fixed;right:16px;bottom:158px;width:min(390px,calc(100vw - 24px));height:min(560px,calc(100dvh - 190px));z-index:99999;background:#fff;border:1px solid #e4eaf5;border-radius:22px;box-shadow:0 20px 70px #12254a30;display:none;overflow:hidden;font:14px/1.45 system-ui,-apple-system,sans-serif;color:#1e293b}
+  #rs-ai-panel.rs-open{display:flex;flex-direction:column}
+  #rs-ai-head{display:flex;align-items:center;gap:10px;padding:14px;background:linear-gradient(110deg,#edf6ff,#f5f1ff);border-bottom:1px solid #e8edf5}
+  #rs-ai-logo{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;background:#20d900;color:#063f1d;font-size:21px;font-weight:800}
+  #rs-ai-headtext{flex:1;min-width:0}#rs-ai-headtext strong{display:block;font-size:14px}#rs-ai-headtext small{color:#64748b}
+  .rs-ai-headbtn{border:0;background:transparent;color:#64748b;padding:5px;cursor:pointer;font-size:13px}
+  #rs-ai-messages{flex:1;overflow:auto;padding:14px 12px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth}
+  .rs-ai-msg{max-width:88%;padding:10px 12px;border-radius:15px;white-space:pre-wrap;overflow-wrap:anywhere}
+  .rs-ai-user{align-self:flex-end;background:#1263e9;color:white;border-bottom-right-radius:5px}
+  .rs-ai-bot{align-self:flex-start;background:#f1f5f9;color:#25344a;border-bottom-left-radius:5px}
+  .rs-ai-error{background:#fff0f2;color:#9f2945}
+  #rs-ai-suggestions{display:flex;gap:7px;overflow-x:auto;padding:0 12px 10px;scrollbar-width:thin}
+  .rs-ai-suggest{white-space:nowrap;border:1px solid #dbe4ef;background:#fff;border-radius:99px;padding:7px 10px;color:#41536a;font-size:12px;cursor:pointer}
+  #rs-ai-compose{display:flex;gap:7px;align-items:flex-end;padding:10px;border-top:1px solid #edf0f5}
+  #rs-ai-input{flex:1;min-width:0;max-height:100px;resize:none;border:1px solid #b8cbe8;border-radius:13px;padding:11px;outline:none;font:14px system-ui;color:#1e293b}
+  #rs-ai-input:focus{border-color:#1768eb;box-shadow:0 0 0 3px #1768eb18}
+  .rs-ai-action{width:39px;height:39px;flex:0 0 39px;border:0;border-radius:12px;background:#1768eb;color:white;font-size:17px;cursor:pointer}
+  .rs-ai-action:disabled{opacity:.5;cursor:wait}
+  #rs-ai-foot{padding:0 12px 9px;text-align:center;font-size:10px;color:#8491a3}
+  #rs-ai-status{font-size:11px;color:#64748b;padding:0 14px 5px;min-height:14px}
+  @media(max-width:480px){#rs-ai-launch{right:12px;bottom:96px}#rs-ai-panel{right:8px;bottom:145px;width:calc(100vw - 16px);height:min(590px,calc(100dvh - 170px));border-radius:19px}}
+  `;
+  function el(tag, attrs, text) {
+    var n = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) { if (k === 'class') n.className = attrs[k]; else if (k === 'style') n.style.cssText = attrs[k]; else n.setAttribute(k, attrs[k]); });
+    if (text != null) n.textContent = text;
+    return n;
+  }
+  function save() { try { localStorage.setItem(STORAGE, JSON.stringify(history.slice(-12))); } catch (_) {} }
+  function getPageContext() {
+    var err = '';
+    try {
+      var candidates = document.querySelectorAll('[role="alert"], .error, .error-message, .alert-danger, .toast-error, .text-danger');
+      for (var i = 0; i < candidates.length; i++) {
+        var t = (candidates[i].innerText || '').trim();
+        if (t && t.length < 350 && /error|fail|unable|invalid|problem|not work|failed/i.test(t)) { err = t; break; }
+      }
+    } catch (_) {}
+    return { path: location.pathname + location.search, title: document.title, error: err };
+  }
+  function addMessage(role, content, isError) {
+    var n = el('div', { class: 'rs-ai-msg ' + (role === 'user' ? 'rs-ai-user' : 'rs-ai-bot') + (isError ? ' rs-ai-error' : '') }, content);
+    list.appendChild(n); list.scrollTop = list.scrollHeight;
+    return n;
+  }
+  function setBusy(on, message) {
+    busy = on; sendBtn.disabled = on; status.textContent = message || (on ? 'Thinking…' : '');
+    if (window.ReelMascot && typeof window.ReelMascot.play === 'function') {
+      try { window.ReelMascot.play(on ? 'curious-left' : 'joyful-wide'); } catch (_) {}
+    }
+  }
+  function send(text) {
+    text = String(text == null ? input.value : text).trim();
+    if (!text || busy) return;
+    input.value = ''; input.style.height = 'auto';
+    history.push({ role: 'user', content: text }); history = history.slice(-12); save();
+    addMessage('user', text); setBusy(true, 'Thinking…');
+    var pending = addMessage('assistant', 'One moment…');
+    fetch('/api/mascot/chat', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: history.slice(-8), page: getPageContext() })
+    }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (data) { if (!r.ok || !data.success) throw new Error(data.error || 'Support is temporarily unavailable.'); return data; }); })
+      .then(function (data) {
+        pending.textContent = data.reply; history.push({ role: 'assistant', content: data.reply }); history = history.slice(-12); save();
+        status.textContent = '';
+      }).catch(function (e) {
+        pending.classList.add('rs-ai-error');
+        pending.textContent = (e.message || 'Could not reach AI support.') + ' You can also visit the Contact page.';
+        status.textContent = '';
+      }).finally(function () { setBusy(false, ''); list.scrollTop = list.scrollHeight; });
+  }
+  function openPanel() { panel.classList.add('rs-open'); launch.setAttribute('aria-expanded', 'true'); if (!list.children.length) addMessage('assistant', 'Hi! I’m your ReelScribe Assistant. Ask me about transcripts, clips, plans, or troubleshooting. 😊'); input.focus(); list.scrollTop = list.scrollHeight; }
+  function closePanel() { panel.classList.remove('rs-open'); launch.setAttribute('aria-expanded', 'false'); }
+  var launch;
+  function init() {
+    if (!document.body || document.getElementById('rs-ai-panel')) return;
+    var style = el('style', {}, css); document.head.appendChild(style);
+    launch = el('button', { id: 'rs-ai-launch', type: 'button', 'aria-label': 'Open ReelScribe AI assistant', 'aria-expanded': 'false' }, '✦ AI Help');
+    panel = el('section', { id: 'rs-ai-panel', role: 'dialog', 'aria-label': 'ReelScribe Assistant' });
+    var head = el('div', { id: 'rs-ai-head' });
+    head.appendChild(el('div', { id: 'rs-ai-logo' }, '✦'));
+    var ht = el('div', { id: 'rs-ai-headtext' }); ht.appendChild(el('strong', {}, 'ReelScribe Assistant')); ht.appendChild(el('small', {}, 'AI help · Hinglish & English')); head.appendChild(ht);
+    var clear = el('button', { class: 'rs-ai-headbtn', type: 'button' }, 'Clear');
+    var close = el('button', { class: 'rs-ai-headbtn', type: 'button', 'aria-label': 'Close assistant' }, '✕');
+    head.appendChild(clear); head.appendChild(close); panel.appendChild(head);
+    list = el('div', { id: 'rs-ai-messages', 'aria-live': 'polite' }); panel.appendChild(list);
+    status = el('div', { id: 'rs-ai-status' }); panel.appendChild(status);
+    var suggestions = el('div', { id: 'rs-ai-suggestions' });
+    [['Create clips','How do I create clips?'],['Transcript help','How do I generate a transcript?'],['Plans & limits','Where can I check my plan limits?'],['Fix an error','Help me troubleshoot an error.']].forEach(function (item) {
+      var b = el('button', { class: 'rs-ai-suggest', type: 'button' }, item[0]); b.addEventListener('click', function () { send(item[1]); }); suggestions.appendChild(b);
+    });
+    panel.appendChild(suggestions);
+    var compose = el('div', { id: 'rs-ai-compose' });
+    input = el('textarea', { id: 'rs-ai-input', rows: '1', maxlength: '1200', placeholder: 'Ask me anything…', 'aria-label': 'Message the assistant' });
+    var mic = el('button', { class: 'rs-ai-action', type: 'button', 'aria-label': 'Voice input', title: 'Voice input' }, '🎙');
+    sendBtn = el('button', { class: 'rs-ai-action', type: 'button', 'aria-label': 'Send message' }, '➤');
+    compose.appendChild(input); compose.appendChild(mic); compose.appendChild(sendBtn); panel.appendChild(compose);
+    panel.appendChild(el('div', { id: 'rs-ai-foot' }, 'AI can make mistakes. Never share passwords or OTPs.'));
+    document.body.appendChild(launch); document.body.appendChild(panel);
+    launch.addEventListener('click', function () { panel.classList.contains('rs-open') ? closePanel() : openPanel(); });
+    close.addEventListener('click', closePanel);
+    clear.addEventListener('click', function () { history = []; save(); list.innerHTML = ''; addMessage('assistant', 'Chat cleared. What can I help you with?'); });
+    sendBtn.addEventListener('click', function () { send(); });
+    input.addEventListener('input', function () { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 100) + 'px'; });
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { mic.title = 'Voice input is not supported in this browser'; mic.addEventListener('click', function () { status.textContent = 'Voice input is not supported in this browser. You can type your question.'; }); }
+    else {
+      recognition = new SR(); recognition.lang = /^hi/i.test(navigator.language || '') ? 'hi-IN' : 'en-IN'; recognition.interimResults = false; recognition.maxAlternatives = 1;
+      recognition.onstart = function () { mic.textContent = '⏺'; status.textContent = 'Listening…'; };
+      recognition.onresult = function (e) { input.value = e.results[0][0].transcript; status.textContent = 'Voice captured. Tap send.'; input.focus(); };
+      recognition.onerror = function () { status.textContent = 'Could not use microphone. Check browser permission.'; };
+      recognition.onend = function () { mic.textContent = '🎙'; };
+      mic.addEventListener('click', function () { try { recognition.start(); } catch (_) { status.textContent = 'Microphone is already listening.'; } });
+    }
+    if ('speechSynthesis' in window) {
+      // Long-press / double-click assistant message to read it aloud.
+      list.addEventListener('dblclick', function (e) { var node = e.target.closest('.rs-ai-bot'); if (node) { window.speechSynthesis.cancel(); window.speechSynthesis.speak(new SpeechSynthesisUtterance(node.textContent)); } });
+      panel.setAttribute('aria-description', 'Double-tap an assistant response to hear it read aloud.');
+    }
+    history.forEach(function (m) { addMessage(m.role, m.content); });
+  }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();

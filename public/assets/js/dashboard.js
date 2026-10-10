@@ -76,6 +76,11 @@ async function loadUserPlan() {
   }
 }
 
+function setCurrentReel(item) {
+  window.rsCurrentReel = { id: item._id, hasSegments: item.hasSegments !== false && !!item.hasSegments };
+  if (window.rsSetReel) window.rsSetReel(window.rsCurrentReel);
+}
+
 async function loadLatestTranscript() {
   const body = document.getElementById("transcriptBody");
   const actions = document.getElementById("transcriptActions");
@@ -110,6 +115,7 @@ async function loadLatestTranscript() {
     if (data.success && data.data && data.data.length > 0) {
       const latest = data.data[0];
       body.innerText = latest.transcript;
+      setCurrentReel(latest);
       actions.style.display = "flex";
       badge.innerText = "Latest";
       badge.classList.add("latest");
@@ -156,6 +162,7 @@ async function loadHistory() {
         `;
         div.addEventListener("click", () => {
           document.getElementById("transcriptBody").innerText = item.transcript;
+          setCurrentReel(item);
           document.getElementById("transcriptActions").style.display = "flex";
           localStorage.setItem("latestTranscript", item.transcript);
           window.scrollTo({ top: 0, behavior: "smooth" });
