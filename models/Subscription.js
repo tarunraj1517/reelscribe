@@ -28,7 +28,7 @@ const SubscriptionSchema = new mongoose.Schema({
   cancelReason: { type: String, default: null },
 }, { timestamps: true });
 
-module.exports = mongoose.models.Subscription || mongoose.model("Subscription", SubscriptionSchema);
-
 SubscriptionSchema.index({ userEmail: 1, createdAt: -1 });
 SubscriptionSchema.index({ razorpaySubscriptionId: 1, status: 1 });
+
+module.exports = mongoose.models.Subscription || mongoose.model("Subscription", SubscriptionSchema);

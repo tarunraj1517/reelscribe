@@ -41,6 +41,9 @@ const UserSchema = new mongoose.Schema({
   referralCuts:   { type: Number, default: 0, min: 0 },
   referralsCount: { type: Number, default: 0, min: 0 },
 
+  // Per-bucket daily counters for AI tools / clip edits: { ai: {day:"2026-10-09", n:3}, edit: {...} }
+  usage: { type: mongoose.Schema.Types.Mixed, default: {} },
+
   // One-way request fingerprints used for referral anti-abuse checks.
   signupIpHash: { type: String, default: null, index: true },
   signupUaHash: { type: String, default: null },
